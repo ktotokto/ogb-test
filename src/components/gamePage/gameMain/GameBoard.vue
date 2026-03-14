@@ -5,7 +5,8 @@
 
 <template>
 
-    <section class="flex">
+    <section>
+
     </section>
     
 </template>
