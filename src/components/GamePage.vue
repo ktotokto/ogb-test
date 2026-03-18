@@ -9,8 +9,10 @@ import GameFooter from './gamePage/GameFooter.vue';
 
 
 <template>
-  <GameHeader />
-  <GameMain />
-  <PlayerHand />
-  <GameFooter />
+  <div>
+    <GameHeader />
+    <GameMain />
+    <PlayerHand />
+    <GameFooter />
+  </div>
 </template>

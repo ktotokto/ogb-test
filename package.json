@@ -23,7 +23,8 @@
     "vue": "^3.4.0",
     "vue-konva": "^3.0.2",
     "vue-router": "^4.2.0",
-    "vue-sonner": "^1.0.3"
+    "vue-sonner": "^1.0.3",
+    "vue3-interactjs": "^1.0.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
