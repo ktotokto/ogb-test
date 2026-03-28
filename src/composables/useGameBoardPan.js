@@ -1,5 +1,5 @@
 import interact from 'interactjs'
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, toValue } from 'vue'
 
 export function useGameBoardPan(boardRef, options = {}) {
     const {
@@ -29,18 +29,16 @@ export function useGameBoardPan(boardRef, options = {}) {
 
         interactable = interact(boardRef.value)
             .draggable({
-                enabled: true,
+                enabled: () => props.enabled,
                 allowFrom: '.board-pan-area',
                 ignoreFrom: '.game-object, .game-object *, button, input, textarea',
                 listeners: {
                     start(event) {
-                        // Только если зажат Alt или средняя кнопка
                         if (!event.pointerType || event.originalEvent?.altKey || event.originalEvent?.button === 1) {
                             isPanning.value = true
                             boardRef.value.style.cursor = 'grabbing'
                             onPanStart?.(event, { ...panOffset.value })
                         } else {
-                            // Отменяем драг если не те условия
                             event.preventDefault()
                             return false
                         }
@@ -63,20 +61,13 @@ export function useGameBoardPan(boardRef, options = {}) {
                     }
                 },
                 inertia: true,
-                // ✅ ИСПРАВЛЕНО: правильный синтаксис модификаторов
                 modifiers: [
-                    // Ограничение перемещения (опционально)
-                    // interact.modifiers.restrictRect({
-                    //   restriction: 'self',
-                    //   endOnly: true
-                    // })
                 ]
             })
 
         interactable.styleCursor(false)
     }
 
-    // Zoom функции
     const zoomIn = (step = 0.1) => {
         zoom.value = Math.min(3, zoom.value + step)
         updateTransform()
@@ -98,7 +89,6 @@ export function useGameBoardPan(boardRef, options = {}) {
         updateTransform()
     }
 
-    // Wheel zoom
     const handleWheel = (event) => {
         if (event.ctrlKey || event.metaKey) {
             event.preventDefault()
@@ -108,9 +98,7 @@ export function useGameBoardPan(boardRef, options = {}) {
         }
     }
 
-    // Keyboard navigation
     const handleKeyDown = (event) => {
-        // Игнорируем если фокус в input
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return
 
         const step = event.shiftKey ? 50 : 20
@@ -164,7 +152,7 @@ export function useGameBoardPan(boardRef, options = {}) {
         }
     })
 
-    watch(enabled, (newValue) => {
+    watch(() => toValue(enabled), (newValue) => {
         if (interactable) {
             interactable.draggable({ enabled: newValue })
         }

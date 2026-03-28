@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
 import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2 } from 'lucide-vue-next'
 
@@ -21,16 +21,17 @@ const contextMenuPosition = ref({ x: 0, y: 0 })
 const isHovered = ref(false)
 
 const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
-  enabled: props.isDraggable,
+  enabled: () => props.isDraggable,
   snapToGrid: props.snapToGrid,
   gridSize: props.gridSize,
+  zoom: toRef(props, 'zoom'),
   onDragStart: (event, pos) => {
     emit('select', props.object)
     emit('drag-start', props.object)
   },
   onDragMove: (event, pos) => {
     emit('move', { objectId: props.object.id, position: { x: pos.x, y: pos.y }, live: true })
-  },
+  }, 
   onDragEnd: (event, pos) => {
     const finalX = props.snapToGrid ? Math.round(pos.x / props.gridSize) * props.gridSize : pos.x
     const finalY = props.snapToGrid ? Math.round(pos.y / props.gridSize) * props.gridSize : pos.y
@@ -54,12 +55,14 @@ watch(() => props.object.position, (newPos) => {
 const objectStyles = computed(() => ({
   width: `${props.object.width || 100}px`,
   height: `${props.object.height || 100}px`,
-  zIndex: props.object.zIndex || 1
+  zIndex: props.object.zIndex || 1,
+  // translate: `${props.object.x}px ${props.object.y}px`, 
+  // rotate: `${props.object.rotation}deg` 
 }))
 
 const getObjectIcon = (type) => {
   const icons = { card: 'Карта', dice: 'Кубик', token: 'Токен', model: 'Модель', image: 'Картинка', text: 'Текст' }
-  return icons[type] || '📦'
+  return icons[type] || '_да_'
 }
 
 const handleClick = (event) => {
@@ -111,20 +114,19 @@ const closeContextMenu = () => { showContextMenu.value = false }
           ? 'linear-gradient(135deg, rgba(139,92,246,0.3), rgba(6,182,212,0.3))' 
           : 'linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9))',
         backdropFilter: 'blur(12px)',
-        border: isSelected ? '2px solid rgba(139,92,246,0.8)' : '1px solid rgba(255,255,255,0.1)'
+        border: isSelected ? '2px solid rgba(139,92,246,0.8)' : '1px solid rgba(255,255,255,0.1)',
+        rotate: `${props.object.rotation}deg`
+
       }"
     >
-      <!-- Shine effect -->
       <div class="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
       
-      <!-- Drag handle -->
       <div v-if="isSelected && !isDragging" class="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
         <div class="px-3 py-1 rounded-full glass bg-violet-500/20 border border-violet-500/50 text-xs text-violet-300">
           {{ object.label || object.type }}
         </div>
       </div>
 
-      <!-- Content -->
       <div class="w-full h-full flex items-center justify-center p-3 relative">
         <template v-if="object.type === 'image' && object.url">
           <img :src="object.url" class="w-full h-full object-contain rounded-lg" draggable="false" />
@@ -141,7 +143,6 @@ const closeContextMenu = () => { showContextMenu.value = false }
         </template>
       </div>
 
-      <!-- Selection indicators -->
       <template v-if="isSelected">
         <div class="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.8)]"></div>
         <div class="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.8)]"></div>
@@ -149,7 +150,6 @@ const closeContextMenu = () => { showContextMenu.value = false }
         <div class="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.8)]"></div>
       </template>
 
-      <!-- Quick actions -->
       <div v-if="isSelected && !isDragging" class="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-1 glass-strong rounded-xl p-1.5 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
         <button @click.stop="handleRotate" class="p-2 rounded-lg hover:bg-violet-500/20 text-slate-300 hover:text-violet-300 transition-colors" title="Повернуть">
           <RotateCw class="w-4 h-4" />
@@ -163,7 +163,6 @@ const closeContextMenu = () => { showContextMenu.value = false }
       </div>
     </div>
 
-    <!-- Context Menu -->
     <Teleport to="body">
       <div v-if="showContextMenu" class="fixed glass-strong rounded-2xl shadow-2xl py-2 z-[100] min-w-[200px] border border-white/10 animate-slide-in" :style="{ left: `${contextMenuPosition.x}px`, top: `${contextMenuPosition.y}px` }" @click.stop>
         <div class="px-4 py-2 text-xs font-semibold text-slate-400 border-b border-white/10 mb-1">

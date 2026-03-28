@@ -33,23 +33,15 @@ onUnmounted(() => {
 
 <template>
   <nav class="h-20 glass-strong border-b border-white/10 flex items-center justify-between px-8 shrink-0 relative overflow-hidden">
-    <!-- Animated background line -->
     <div class="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
     
-    <!-- Session Info -->
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-3 px-5 py-2.5 rounded-xl glass-light border border-white/10">
         <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.8)]"></div>
-        <span class="font-mono text-sm font-semibold text-slate-300">#{{ sessionId }}</span>
-      </div>
-      
-      <div class="flex items-center gap-2.5 px-4 py-2 rounded-lg glass text-sm">
-        <component :is="isConnected ? Wifi : WifiOff" class="w-4 h-4" :class="isConnected ? 'text-emerald-400' : 'text-red-400'" />
-        <span class="font-medium">{{ isConnected ? 'Онлайн' : 'Оффлайн' }}</span>
+        <span class="copy font-mono text-sm font-semibold text-slate-300">#{{ sessionId }}</span>
       </div>
     </div>
 
-    <!-- Timer -->
     <div class="flex items-center gap-3 px-8 py-3 rounded-2xl glass bg-gradient-to-br from-violet-500/10 to-cyan-500/10 border border-violet-500/30 shadow-lg">
       <Clock class="w-5 h-5 text-violet-400" />
       <div class="flex items-center gap-1.5 font-mono text-2xl font-bold">
@@ -67,7 +59,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Action Buttons -->
     <div class="flex items-center gap-3">
       <button class="btn-primary flex items-center gap-2.5 px-6">
         <Save class="w-4 h-4" />

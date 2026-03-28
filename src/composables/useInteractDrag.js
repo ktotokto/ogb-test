@@ -1,11 +1,13 @@
 import interact from 'interactjs'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useGameBoardPan } from "./useGameBoardPan.js"
 
 export function useInteractDrag(elementRef, options = {}) {
     const {
         onDragStart,
         onDragMove,
         onDragEnd,
+        zoom,
         enabled = true,
         restrictToParent = false,
         snapToGrid = false,
@@ -52,8 +54,8 @@ export function useInteractDrag(elementRef, options = {}) {
                     onDragStart?.(event, { ...position.value })
                 },
                 move(event) {
-                    position.value.x += event.dx
-                    position.value.y += event.dy
+                    position.value.x += event.dx / zoom.value
+                    position.value.y += event.dy / zoom.value
                     event.target.style.transform = `translate(${position.value.x}px, ${position.value.y}px)`
                     onDragMove?.(event, { ...position.value })
                 },
