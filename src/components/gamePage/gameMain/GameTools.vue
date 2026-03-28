@@ -1,84 +1,79 @@
 <script setup>
 import { ref } from 'vue'
+import { MousePointer2, Hand, Pencil, Type, Square, Eraser, Undo2, Redo2 } from 'lucide-vue-next'
 
 const activeTool = ref('select')
 
 const tools = [
-    { id: 'select', icon: 'cursor', label: 'Выделение', shortcut: 'V' },
-    { id: 'pan', icon: 'hand', label: 'Перемещение', shortcut: 'H' },
-    { id: 'draw', icon: 'pencil', label: 'Рисование', shortcut: 'P' },
-    { id: 'text', icon: 'text', label: 'Текст', shortcut: 'T' },
-    { id: 'shape', icon: 'square', label: 'Фигуры', shortcut: 'S' },
+  { id: 'select', icon: MousePointer2, label: 'Выбор', shortcut: 'V', color: 'from-violet-500 to-purple-600' },
+  { id: 'pan', icon: Hand, label: 'Перемещение', shortcut: 'H', color: 'from-cyan-500 to-blue-600' },
+  { id: 'draw', icon: Pencil, label: 'Рисование', shortcut: 'P', color: 'from-amber-500 to-orange-600' },
+  { id: 'text', icon: Type, label: 'Текст', shortcut: 'T', color: 'from-emerald-500 to-teal-600' },
+  { id: 'shape', icon: Square, label: 'Фигуры', shortcut: 'S', color: 'from-pink-500 to-rose-600' },
+  { id: 'erase', icon: Eraser, label: 'Ластик', shortcut: 'E', color: 'from-slate-500 to-gray-600' }
 ]
 
 const actions = [
-    { id: 'dice', label: 'Бросить кубик', hotkey: 'D' },
-    { id: 'card', label: 'Взять карту', hotkey: 'C' },
-    { id: 'undo', label: 'Отменить', hotkey: 'Ctrl+Z' },
-    { id: 'redo', label: 'Повторить', hotkey: 'Ctrl+Y' },
+  { id: 'undo', icon: Undo2, label: 'Отменить', shortcut: 'Ctrl+Z' },
+  { id: 'redo', icon: Redo2, label: 'Повторить', shortcut: 'Ctrl+Y' }
 ]
 </script>
 
 <template>
-    <div class="space-y-4">
-
-        <div>
-            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">
-                Инструменты
-            </h3>
-            <div class="grid grid-cols-5 gap-1">
-                <button v-for="tool in tools" :key="tool.id" @click="activeTool = tool.id"
-                    :title="`${tool.label} (${tool.shortcut})`" :class="[
-                        'p-2.5 rounded-lg transition-all flex flex-col items-center gap-1',
-                        activeTool === tool.id
-                            ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/25'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
-                    ]">
-                    <span class="text-[10px] font-mono text-slate-400">{{ tool.shortcut }}</span>
-                </button>
-            </div>
+  <div class="w-80 p-6">
+    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+      <span class="w-1 h-4 bg-gradient-to-b from-violet-500 to-cyan-500 rounded-full"></span>
+      Инструменты
+    </h3>
+    
+    <!-- Tools Grid - 2 columns for better spacing -->
+    <div class="grid grid-cols-2 gap-3 mb-6">
+      <button v-for="tool in tools" :key="tool.id"
+              @click="activeTool = tool.id"
+              :class="[
+                'relative p-4 rounded-xl transition-all duration-300 group text-left',
+                activeTool === tool.id 
+                  ? `bg-gradient-to-br ${tool.color} text-white shadow-lg scale-[1.02]` 
+                  : 'glass-light hover:bg-white/5 text-slate-300 hover:text-white border border-white/5'
+              ]">
+        <div class="flex items-start justify-between mb-2">
+          <component :is="tool.icon" class="w-6 h-6" />
+          <span class="text-[10px] opacity-60 font-mono">{{ tool.shortcut }}</span>
         </div>
-
-        <div>
-            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">
-                Действия
-            </h3>
-            <div class="space-y-1">
-                <button v-for="action in actions" :key="action.id" :title="`${action.label} (${action.hotkey})`"
-                    class="w-full flex items-center gap-3 p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors group">
-                    <span class="flex-1 text-left text-sm">{{ action.label }}</span>
-                    <span class="text-[10px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded">
-                        {{ action.hotkey }}
-                    </span>
-                </button>
-            </div>
-        </div>
-
-        <div class="pt-2 border-t border-slate-800">
-            <div class="flex items-center justify-between">
-                <span class="text-sm text-slate-400">Масштаб</span>
-                <div class="flex items-center gap-1">
-                    <button class="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-                        </svg>
-                    </button>
-                    <span class="text-sm font-mono w-12 text-center">100%</span>
-                    <button class="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
-                    <button class="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white ml-1"
-                        title="Сбросить">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-
+        <span class="text-sm font-medium block">{{ tool.label }}</span>
+        
+        <!-- Active indicator -->
+        <div v-if="activeTool === tool.id" class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white/80"></div>
+      </button>
     </div>
+
+    <!-- Actions -->
+    <div class="mb-6">
+      <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Действия</h4>
+      <div class="space-y-2">
+        <button v-for="action in actions" :key="action.id"
+                class="w-full flex items-center gap-3 p-3 rounded-lg glass-light hover:bg-white/5 text-slate-300 hover:text-white transition-all duration-300 group border border-white/5">
+          <component :is="action.icon" class="w-5 h-5 group-hover:scale-110 transition-transform" />
+          <span class="text-sm flex-1 text-left font-medium">{{ action.label }}</span>
+          <span class="text-[10px] text-slate-500 font-mono bg-slate-800/50 px-2 py-1 rounded">{{ action.shortcut }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="pt-6 border-t border-white/10">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-medium text-slate-400">Масштаб</span>
+        <span class="text-sm font-mono font-semibold text-violet-400">100%</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="flex-1 py-3 rounded-lg glass-light hover:bg-white/5 text-slate-300 hover:text-white transition-colors text-xl font-semibold hover:scale-105 active:scale-95">−</button>
+        <button class="flex-1 py-3 rounded-lg glass text-sm font-semibold text-slate-300 hover:text-white transition-colors hover:bg-white/5">100%</button>
+        <button class="flex-1 py-3 rounded-lg glass-light hover:bg-white/5 text-slate-300 hover:text-white transition-colors text-xl font-semibold hover:scale-105 active:scale-95">+</button>
+      </div>
+      <button class="w-full mt-3 py-2.5 rounded-lg glass-light hover:bg-white/5 text-xs text-slate-400 hover:text-slate-300 transition-colors">
+        Сбросить масштаб
+      </button>
+    </div>
+  </div>
 </template>

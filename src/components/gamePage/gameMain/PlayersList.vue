@@ -1,74 +1,76 @@
 <script setup>
-import { computed } from 'vue'
+import { ref } from 'vue'
+import { Crown, Star, User, Wifi, WifiOff } from 'lucide-vue-next'
 
-const props = defineProps({
-    players: {
-        type: Array,
-        default: () => [
-            { id: 1, name: 'Alex', role: 'creator', avatar: 'й', status: 'online', ready: true },
-            { id: 2, name: 'Maria', role: 'admin', avatar: 'о', status: 'online', ready: true },
-            { id: 3, name: 'John', role: 'guest', avatar: 'м', status: 'away', ready: false },
-            { id: 4, name: 'Kate', role: 'guest', avatar: 'ф', status: 'offline', ready: false },
-        ]
-    }
-})
+const players = ref([
+  { id: 1, name: 'Alex', role: 'creator', avatar: '1', status: 'online', score: 1250 },
+  { id: 2, name: 'Maria', role: 'admin', avatar: '2', status: 'online', score: 980 },
+  { id: 3, name: 'John', role: 'guest', avatar: '3', status: 'away', score: 750 },
+  { id: 4, name: 'Kate', role: 'guest', avatar: '4', status: 'offline', score: 540 }
+])
 
-const roleColors = {
-    creator: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    admin: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-    guest: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+const roleConfig = {
+  creator: { icon: Crown, color: 'from-amber-400 to-orange-500', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+  admin: { icon: Star, color: 'from-violet-400 to-purple-500', bg: 'bg-violet-500/20', text: 'text-violet-400', border: 'border-violet-500/30' },
+  guest: { icon: User, color: 'from-slate-400 to-slate-500', bg: 'bg-slate-500/20', text: 'text-slate-400', border: 'border-slate-500/30' }
 }
 
-const statusColors = {
-    online: 'bg-emerald-500',
-    away: 'bg-amber-500',
-    offline: 'bg-slate-500'
+const statusConfig = {
+  online: { color: 'bg-emerald-400', text: 'text-emerald-400', label: 'Онлайн' },
+  away: { color: 'bg-amber-400', text: 'text-amber-400', label: 'Отошёл' },
+  offline: { color: 'bg-slate-500', text: 'text-slate-500', label: 'Оффлайн' }
 }
 </script>
 
 <template>
-    <div class="p-2 space-y-2">
-        <div v-for="player in players" :key="player.id"
-            class="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50 hover:bg-slate-800 transition-colors group">
-            <div class="relative">
-                <div
-                    class="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-lg">
-                    {{ player.avatar }}
-                </div>
-                <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-slate-900"
-                    :class="statusColors[player.status]" :title="player.status" />
+  <div class="w-80 p-6 border-b border-white/10">
+    <h2 class="font-bold text-lg mb-5 flex items-center gap-2">
+      <span class="w-1 h-6 bg-gradient-to-b from-violet-500 to-cyan-500 rounded-full"></span>
+      Игроки
+      <span class="text-xs px-2 py-1 rounded-full glass text-slate-400">{{ players.length }}</span>
+    </h2>
+    
+    <div class="space-y-3">
+      <div v-for="player in players" :key="player.id" 
+           class="pb-8 group p-4 rounded-xl glass-light hover:bg-white/5 transition-all duration-300 border border-transparent hover:border-violet-500/30 cursor-pointer">
+        <div class="flex items-center gap-3">
+          <!-- Avatar -->
+          <div class="relative">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform">
+              {{ player.avatar }}
             </div>
+            <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-900" 
+                 :class="statusConfig[player.status].color"></div>
+          </div>
 
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                    <span class="font-medium truncate">{{ player.name }}</span>
-                    <span class="px-2 py-0.5 text-xs rounded-full border" :class="roleColors[player.role]">
-                        {{ player.role }}
-                    </span>
-                </div>
-                <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs" :class="player.ready ? 'text-emerald-400' : 'text-slate-500'">
-                        {{ player.ready ? 'Готов' : 'Не готов' }}
-                    </span>
-                </div>
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-semibold text-sm truncate">{{ player.name }}</span>
+              <component :is="roleConfig[player.role].icon" 
+                        class="w-4 h-4 flex-shrink-0" 
+                        :class="roleConfig[player.role].text" />
             </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span :class="statusConfig[player.status].text">{{ statusConfig[player.status].label }}</span>
+              <span class="text-slate-600">•</span>
+              <span class="text-slate-400">{{ player.score }} pts</span>
+            </div>
+          </div>
 
-            <div v-if="player.role === 'guest'" class="opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="p-1.5 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                </button>
-            </div>
+          <!-- Role Badge -->
+          <div class="px-3 py-1.5 rounded-lg text-xs font-semibold glass capitalize" 
+               :class="[roleConfig[player.role].bg, roleConfig[player.role].text, roleConfig[player.role].border]">
+            {{ player.role }}
+          </div>
         </div>
-
-        <button
-            class="w-full mt-2 py-2.5 border-2 border-dashed border-slate-700 rounded-xl text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-800/50 transition-all flex items-center justify-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Пригласить игрока
-        </button>
+      </div>
     </div>
+
+    <!-- Invite Button -->
+    <button class="w-full mt-5 py-3.5 rounded-xl border-2 border-dashed border-violet-500/30 hover:border-violet-500/60 text-violet-400 hover:text-violet-300 hover:bg-violet-500/5 transition-all duration-300 flex items-center justify-center gap-2 group font-medium">
+      <span class="text-xl group-hover:rotate-90 transition-transform">+</span>
+      <span>Пригласить игрока</span>
+    </button>
+  </div>
 </template>

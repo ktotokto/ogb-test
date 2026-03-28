@@ -14,8 +14,9 @@
     "axios": "^1.6.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "interactjs": "^1.10.27",
     "konva": "^9.3.0",
-    "lucide-vue-next": "^0.300.0",
+    "lucide-vue-next": "^1.0.0",
     "pinia": "^2.1.7",
     "radix-vue": "^1.2.0",
     "socket.io-client": "^4.7.2",
@@ -23,8 +24,7 @@
     "vue": "^3.4.0",
     "vue-konva": "^3.0.2",
     "vue-router": "^4.2.0",
-    "vue-sonner": "^1.0.3",
-    "vue3-interactjs": "^1.0.4"
+    "vue-sonner": "^1.0.3"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
