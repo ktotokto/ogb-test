@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref } from 'vue'
 import GameHeader from './GameHeader.vue'
 import GameMain from './gameMain/GameBoard.vue'
 import GameHand from './GameHand.vue'
@@ -17,28 +17,20 @@ defineProps({
 const sidebarOpen = ref(true)
 const gameBoardRef = ref(null)
 
-// ✅ Безопасные хендлеры с проверкой
 const handleZoomIn = () => {
-  if (gameBoardRef.value?.zoomIn) {
-    gameBoardRef.value.zoomIn()
-  }
+  gameBoardRef.value?.zoomIn()
 }
 
 const handleZoomOut = () => {
-  if (gameBoardRef.value?.zoomOut) {
-    gameBoardRef.value.zoomOut()
-  }
+  gameBoardRef.value?.zoomOut()
 }
 
 const handleResetZoom = () => {
-  if (gameBoardRef.value?.resetZoom) {
-    gameBoardRef.value.resetZoom()
-  }
+  gameBoardRef.value?.resetZoom()
 }
 
-const handlePanMode = (enabled) => {
-  // Можно добавить логику переключения режима панорамирования
-  console.log('Pan mode:', enabled)
+const handleSetTool = (tool) => {
+  gameBoardRef.value?.setTool(tool)
 }
 </script>
 
@@ -48,7 +40,7 @@ const handlePanMode = (enabled) => {
 
     <div class="flex-1 flex overflow-hidden">
       <aside :class="[
-        'glass-strong border-r border-white/10 flex flex-col transition-all duration-300 overflow-y-auto',
+        'bg-slate-900/90 backdrop-blur border-r border-white/10 flex flex-col transition-all duration-300 overflow-y-auto',
         sidebarOpen ? 'w-80 translate-x-0' : 'w-0 -translate-x-full overflow-hidden'
       ]">
         <PlayersList />
@@ -62,6 +54,6 @@ const handlePanMode = (enabled) => {
     </div>
 
     <GameFooter @toggle-sidebar="sidebarOpen = !sidebarOpen" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut"
-      @reset-zoom="handleResetZoom" @pan-mode="handlePanMode" />
+      @reset-zoom="handleResetZoom" @set-tool="handleSetTool" />
   </div>
 </template>
