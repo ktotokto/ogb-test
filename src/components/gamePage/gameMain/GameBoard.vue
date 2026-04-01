@@ -9,7 +9,6 @@ const gameStore = useGameStore()
 const userStore = useUserStore()
 
 const boardRef = ref(null)
-const boardContainerRef = ref(null)
 const drawCanvasRef = ref(null)
 const selectedObjects = ref(new Set())
 const showGrid = ref(true)
@@ -20,6 +19,11 @@ const brushColor = ref('#8b5cf6')
 const brushSize = ref(3)
 const isDrawing = ref(false)
 const lastPoint = ref(null)
+
+const isSelecting = ref(false)
+const selectionStart = ref({ x: 0, y: 0 })
+const selectionEnd = ref({ x: 0, y: 0 })
+const selectionBox = ref(null)
 
 const {
   isPanning,
@@ -183,7 +187,9 @@ const handleBoardMouseDown = (event) => {
   if (event.target.closest('.game-object')) return
   if (event.target.closest('.toolbar')) return
 
-  if (currentTool.value === 'draw') {
+  if (currentTool.value === 'select') {
+    startSelection(event)
+  } else if (currentTool.value === 'draw') {
     startDrawing(event)
   } else if (currentTool.value === 'erase') {
     eraseAtPoint(event)
@@ -193,7 +199,9 @@ const handleBoardMouseDown = (event) => {
 }
 
 const handleBoardMouseMove = (event) => {
-  if (currentTool.value === 'draw') {
+  if (currentTool.value === 'select') {
+    updateSelection(event)
+  } else if (currentTool.value === 'draw') {
     draw(event)
   } else if (currentTool.value === 'erase') {
     eraseAtPoint(event)
@@ -202,7 +210,29 @@ const handleBoardMouseMove = (event) => {
 
 const handleBoardMouseUp = () => {
   stopDrawing()
+  endSelection()
 }
+
+const handleObjectMove = ({ objectId, position }) => {
+  const obj = objects.value.find(o => o.id === objectId)
+  if (obj) {
+    obj.position = position
+    // Перемещать все выделенные объекты относительно первого
+    if (selectedObjects.value.has(objectId)) {
+      const offsetX = position.x - (obj.lastPosition?.x || position.x)
+      const offsetY = position.y - (obj.lastPosition?.y || position.y)
+      objects.value.forEach(o => {
+        if (selectedObjects.value.has(o.id) && o.id !== objectId) {
+          o.position.x += offsetX
+          o.position.y += offsetY
+          o.lastPosition = { ...o.position }
+        }
+      })
+    }
+    obj.lastPosition = { ...position }
+  }
+}
+
 
 const selectCardToAdd = (card) => {
   selectedCard.value = card
@@ -210,37 +240,126 @@ const selectCardToAdd = (card) => {
   showCardPanel.value = false
 }
 
-const handleObjectSelect = (object) => {
-  selectedObjects.value.clear()
-  selectedObjects.value.add(object.id)
-}
-
-const handleObjectMove = ({ objectId, position }) => {
-  const obj = objects.value.find(o => o.id === objectId)
-  if (obj) obj.position = position
+const handleObjectSelect = (object, event) => {
+  if (event?.ctrlKey || event?.metaKey) {
+    if (selectedObjects.value.has(object.id)) {
+      selectedObjects.value.delete(object.id)
+    } else {
+      selectedObjects.value.add(object.id)
+    }
+  } else if (event?.shiftKey && selectedObjects.value.size > 0) {
+    const firstId = Array.from(selectedObjects.value)[0]
+    const firstIndex = objects.value.findIndex(o => o.id === firstId)
+    const currentIndex = objects.value.findIndex(o => o.id === object.id)
+    const start = Math.min(firstIndex, currentIndex)
+    const end = Math.max(firstIndex, currentIndex)
+    selectedObjects.value.clear()
+    for (let i = start; i <= end; i++) {
+      selectedObjects.value.add(objects.value[i].id)
+    }
+  } else {
+    selectedObjects.value.clear()
+    selectedObjects.value.add(object.id)
+  }
 }
 
 const handleObjectDelete = (objectId) => {
-  objects.value = objects.value.filter(o => o.id !== objectId)
-  selectedObjects.value.delete(objectId)
+  if (objectId) {
+    objects.value = objects.value.filter(o => o.id !== objectId)
+    selectedObjects.value.delete(objectId)
+  } else {
+    const idsToDelete = Array.from(selectedObjects.value)
+    objects.value = objects.value.filter(o => !selectedObjects.value.has(o.id))
+    selectedObjects.value.clear()
+  }
 }
 
 const handleObjectDuplicate = (object) => {
   objects.value.push({
     ...object,
     id: `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    position: { x: object.position.x + 20, y: object.position.y + 20 }
+    position: { x: object.position.x, y: object.position.y}
   })
 }
 
 const handleObjectRotate = ({ objectId, rotation }) => {
-  const obj = objects.value.find(o => o.id === objectId)
-  if (obj) obj.rotation = rotation
+  if (objectId) {
+    const obj = objects.value.find(o => o.id === objectId)
+    if (obj) obj.rotation = rotation
+  } else {
+    selectedObjects.value.forEach(id => {
+      const obj = objects.value.find(o => o.id === id)
+      if (obj) obj.rotation = (obj.rotation || 0) + 90
+    })
+  }
 }
 
 const handleBoardClick = (event) => {
   if (event.target === boardRef.value || event.target.classList.contains('board-background')) {
+    if (!isSelecting.value) {
+      selectedObjects.value.clear()
+    }
+  }
+}
+
+const startSelection = (event) => {
+  if (currentTool.value !== 'select') return
+  if (event.target.closest('.game-object')) return
+
+  const pos = getBoardCoordinates(event)
+  isSelecting.value = true
+  selectionStart.value = { x: pos.x, y: pos.y }
+  selectionEnd.value = { x: pos.x, y: pos.y }
+}
+
+const updateSelection = (event) => {
+  if (!isSelecting.value) return
+  const pos = getBoardCoordinates(event)
+  selectionEnd.value = { x: pos.x, y: pos.y }
+}
+
+const endSelection = () => {
+  if (!isSelecting.value) return
+  isSelecting.value = false
+
+  const minX = Math.min(selectionStart.value.x, selectionEnd.value.x)
+  const maxX = Math.max(selectionStart.value.x, selectionEnd.value.x)
+  const minY = Math.min(selectionStart.value.y, selectionEnd.value.y)
+  const maxY = Math.max(selectionStart.value.y, selectionEnd.value.y)
+
+  objects.value.forEach(obj => {
+    const objX = obj.position.x
+    const objY = obj.position.y
+    const objRight = objX + (obj.width || 100)
+    const objBottom = objY + (obj.height || 100)
+
+    if (objX >= minX && objX <= maxX && objY >= minY && objY <= maxY) {
+      selectedObjects.value.add(obj.id)
+    } else if (objRight >= minX && objRight <= maxX && objBottom >= minY && objBottom <= maxY) {
+      selectedObjects.value.add(obj.id)
+    }
+  })
+
+  selectionStart.value = { x: 0, y: 0 }
+  selectionEnd.value = { x: 0, y: 0 }
+}
+
+const handleKeyDown = (event) => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return
+
+  if (event.key === 'Escape') {
     selectedObjects.value.clear()
+    isSelecting.value = false
+  }
+
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    handleObjectDelete()
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+    event.preventDefault()
+    objects.value.forEach(obj => selectedObjects.value.add(obj.id))
   }
 }
 
@@ -269,26 +388,46 @@ onMounted(() => {
   })
   window.addEventListener('mouseup', handleBoardMouseUp)
   window.addEventListener('mousemove', handleBoardMouseMove)
+  window.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('mouseup', handleBoardMouseUp)
   window.removeEventListener('mousemove', handleBoardMouseMove)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
+
+
+
 
 <template>
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
     <div ref="boardContainerRef" class="absolute inset-0 board-pan-area z-0" @click="handleBoardClick"
       @mousedown="handleBoardMouseDown">
       <div ref="boardRef" class="board-background" :style="gridStyles">
-        <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0" style="z-index: 1; pointer-events: none;" />
+        <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0" style="z-index: 10; pointer-events: none;" />
+        <div v-if="isSelecting" class="absolute border-2 border-violet-400 bg-violet-500/20 pointer-events-none" :style="{
+          left: Math.min(selectionStart.x, selectionEnd.x) + 'px',
+          top: Math.min(selectionStart.y, selectionEnd.y) + 'px',
+          width: Math.abs(selectionEnd.x - selectionStart.x) + 'px',
+          height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
+          zIndex: 5
+        }" />
 
         <GameObject v-for="obj in objects" :key="obj.id" :object="obj" :is-selected="selectedObjects.has(obj.id)"
           :is-draggable="currentTool === 'select'" :is-resizable="obj.resizable !== false" :zoom="zoom"
           :grid-size="gridSize" :snap-to-grid="false" @select="handleObjectSelect" @move="handleObjectMove"
           @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" />
       </div>
+    </div>
+    <div
+      class="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-violet-500/30 text-sm text-violet-300 toolbar z-50">
+      {{ currentTool === 'select' && `Select Tool — ${selectedObjects.size} selected — Ctrl+Click to multi-select` }}
+      {{ currentTool === 'pan' && 'Pan Tool - Hold Alt + Drag' }}
+      {{ currentTool === 'draw' && 'Draw Tool - Click and Drag' }}
+      {{ currentTool === 'erase' && 'Erase Tool - Click and Drag' }}
+      {{ currentTool === 'addCard' && 'Add Card Tool - Click on Board' }}
     </div>
 
     <div class="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 toolbar z-50">
@@ -418,35 +557,12 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
-
-    <div
-      class="absolute bottom-6 right-6 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-white/10 text-sm font-mono toolbar z-50">
-      <span class="text-slate-400">X: </span><span class="text-violet-400 font-semibold">{{ Math.round(panOffset.x)
-        }}</span>
-      <span class="text-slate-500 mx-2">|</span>
-      <span class="text-slate-400">Y: </span><span class="text-cyan-400 font-semibold">{{ Math.round(panOffset.y)
-        }}</span>
-      <span class="text-slate-500 mx-2">|</span>
-      <span class="text-slate-400">Z: </span><span class="text-emerald-400 font-semibold">{{ Math.round(zoom * 100)
-        }}%</span>
-    </div>
-
-    <div
-      class="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-violet-500/30 text-sm text-violet-300 toolbar z-50">
-      {{ currentTool === 'select' && 'Select Tool' }}
-      {{ currentTool === 'pan' && 'Pan Tool - Hold Alt + Drag' }}
-      {{ currentTool === 'draw' && 'Draw Tool - Click and Drag' }}
-      {{ currentTool === 'erase' && 'Erase Tool - Click and Drag' }}
-      {{ currentTool === 'addCard' && 'Add Card Tool - Click on Board' }}
-    </div>
   </div>
 </template>
 
 <style scoped>
 .board-background {
   background-color: #0f172a;
-  width: 100000px;
-  height: 100000px;
   will-change: transform;
   position: absolute;
   top: -50000px;

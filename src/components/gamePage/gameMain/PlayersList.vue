@@ -10,9 +10,9 @@ const players = ref([
 ])
 
 const roleConfig = {
-  creator: { icon: Crown, color: 'from-amber-400 to-orange-500', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
-  admin: { icon: Star, color: 'from-violet-400 to-purple-500', bg: 'bg-violet-500/20', text: 'text-violet-400', border: 'border-violet-500/30' },
-  guest: { icon: User, color: 'from-slate-400 to-slate-500', bg: 'bg-slate-500/20', text: 'text-slate-400', border: 'border-slate-500/30' }
+  creator: { icon: Crown, color: 'from-amber-400 to-orange-500', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30', content: "Создатель"},
+  admin: { icon: Star, color: 'from-violet-400 to-purple-500', bg: 'bg-violet-500/20', text: 'text-violet-400', border: 'border-violet-500/30', content: "Админ" },
+  guest: { icon: User, color: 'from-slate-400 to-slate-500', bg: 'bg-slate-500/20', text: 'text-slate-400', border: 'border-slate-500/30', content: "Игрок" }
 }
 
 const statusConfig = {
@@ -56,7 +56,7 @@ const statusConfig = {
 
           <div class="px-3 py-1.5 rounded-lg text-xs font-semibold glass capitalize" 
                :class="[roleConfig[player.role].bg, roleConfig[player.role].text, roleConfig[player.role].border]">
-            {{ player.role }}
+            {{ roleConfig[player.role].content }}
           </div>
         </div>
       </div>

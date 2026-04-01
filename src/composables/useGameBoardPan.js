@@ -16,34 +16,27 @@ export function useGameBoardPan(boardRef, options = {}) {
         }
     }
 
-    // ✅ ИСПРАВЛЕННЫЙ ЗУМ В ТОЧКУ КУРСОРА
     const zoomAtPoint = (delta, clientX, clientY) => {
         if (!boardRef.value) return
 
-        const oldZoom = zoom.value
-        const newZoom = Math.max(0.25, Math.min(3, oldZoom + delta))
+        const oldZoom = zoom.value;
+        const newZoom = Math.max(0.25, Math.min(3, oldZoom + delta));
 
-        // Получаем позицию доски на экране
-        const boardRect = boardRef.value.getBoundingClientRect()
+        const boardRect = boardRef.value.getBoundingClientRect();
 
-        // Позиция мыши относительно доски ДО зума (в экранных координатах)
-        const mouseXBefore = clientX - boardRect.left
-        const mouseYBefore = clientY - boardRect.top
+        const mouseX = clientX - boardRect.left;
+        const mouseY = clientY - boardRect.top;
 
-        // Позиция мыши в координатах доски ДО зума
-        const boardXBefore = (mouseXBefore - panOffset.value.x) / oldZoom
-        const boardYBefore = (mouseYBefore - panOffset.value.y) / oldZoom
+        const worldX = (50000 - panOffset.value.x) / oldZoom;
+        const worldY = (50000 - panOffset.value.y) / oldZoom;
 
-        // Обновляем зум
-        zoom.value = newZoom
+        zoom.value = newZoom;
 
-        // Вычисляем новый pan offset чтобы та же точка доски осталась под курсором
-        // Формула: mouseX = boardX * newZoom + newPanOffset
-        // Отсюда: newPanOffset = mouseX - boardX * newZoom
-        panOffset.value.x = mouseXBefore - boardXBefore * newZoom
-        panOffset.value.y = mouseYBefore - boardYBefore * newZoom
+        panOffset.value.x = 50000 - worldX * newZoom;
+        panOffset.value.y = 50000 - worldY * newZoom;
+        
+        updateTransform();
 
-        updateTransform()
     }
 
     const zoomIn = (step = 0.1, pointX = null, pointY = null) => {
