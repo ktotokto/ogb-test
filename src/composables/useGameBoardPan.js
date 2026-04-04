@@ -1,8 +1,8 @@
 import interact from 'interactjs'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 
-export function useGameBoardPan(boardRef, options = {}) {
-    const { enabled = true } = options
+export function useGameBoardPan(boardRef, tool, options = {}) {
+    const { enabled = true, onZoomChange, onPanChange } = options  // ← Добавить onPanChange
 
     const isPanning = ref(false)
     const panOffset = ref({ x: 0, y: 0 })
@@ -13,6 +13,11 @@ export function useGameBoardPan(boardRef, options = {}) {
         if (boardRef.value) {
             boardRef.value.style.transform = `translate(${panOffset.value.x}px, ${panOffset.value.y}px) scale(${zoom.value})`
             boardRef.value.style.transformOrigin = '0 0'
+        }
+        
+        // ← Вызвать callback при изменении панорамы
+        if (onPanChange) {
+            onPanChange({ panOffset: { ...panOffset.value }, zoom: zoom.value })
         }
     }
 
@@ -34,9 +39,12 @@ export function useGameBoardPan(boardRef, options = {}) {
 
         panOffset.value.x = 50000 - worldX * newZoom;
         panOffset.value.y = 50000 - worldY * newZoom;
-        
+
         updateTransform();
 
+        if (onZoomChange) {
+            onZoomChange(newZoom)
+        }
     }
 
     const zoomIn = (step = 0.1, pointX = null, pointY = null) => {
@@ -63,12 +71,14 @@ export function useGameBoardPan(boardRef, options = {}) {
         zoom.value = 1
         panOffset.value = { x: 0, y: 0 }
         updateTransform()
+        if (onZoomChange) {
+            onZoomChange(1)
+        }
     }
 
     const setZoom = (value) => {
         const oldZoom = zoom.value
         const newZoom = Math.max(0.25, Math.min(3, value))
-
         const centerX = window.innerWidth / 2
         const centerY = window.innerHeight / 2
         zoomAtPoint(newZoom - oldZoom, centerX, centerY)
@@ -90,6 +100,7 @@ export function useGameBoardPan(boardRef, options = {}) {
             ignoreFrom: '.game-object, .game-object *, button, input, textarea, .draw-canvas, .toolbar',
             listeners: {
                 start(event) {
+                    if (tool.value == "draw") return
                     const originalEvent = event.originalEvent || event.srcEvent
                     if (originalEvent && !originalEvent.altKey && originalEvent.button !== 1) {
                         return

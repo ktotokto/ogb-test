@@ -9,6 +9,7 @@ const gameStore = useGameStore()
 const userStore = useUserStore()
 
 const boardRef = ref(null)
+const boardContainerRef = ref(null)
 const drawCanvasRef = ref(null)
 const selectedObjects = ref(new Set())
 const showGrid = ref(true)
@@ -19,11 +20,9 @@ const brushColor = ref('#8b5cf6')
 const brushSize = ref(3)
 const isDrawing = ref(false)
 const lastPoint = ref(null)
-
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
 const selectionEnd = ref({ x: 0, y: 0 })
-const selectionBox = ref(null)
 
 const {
   isPanning,
@@ -33,7 +32,15 @@ const {
   zoomOut,
   resetZoom,
   setZoom
-} = useGameBoardPan(boardRef, { enabled: true })
+} = useGameBoardPan(boardRef, currentTool, { 
+  enabled: true,
+  onZoomChange: () => {
+    redrawCanvas()  
+  },
+  onPanChange: () => {
+    redrawCanvas()  
+  }
+})
 
 const currentUser = computed(() => userStore.currentUser)
 
@@ -74,68 +81,86 @@ const cursorStyle = computed(() => {
   return cursors[currentTool.value] || 'default'
 })
 
+// ← Canvas размером с экран (не 100000!)
 const initDrawCanvas = () => {
   if (!drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
-  canvas.width = 100000
-  canvas.height = 100000
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
   const ctx = canvas.getContext('2d')
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
+  ctx.strokeStyle = brushColor.value
+  ctx.lineWidth = brushSize.value
 }
 
+// ← Конвертация экранных координат в мировые (board coordinates)
 const getBoardCoordinates = (event) => {
   if (!boardRef.value) return { x: 0, y: 0 }
   const rect = boardRef.value.getBoundingClientRect()
   return {
-    x: Math.round((event.clientX - rect.left - panOffset.value.x) / zoom.value),
-    y: Math.round((event.clientY - rect.top - panOffset.value.y) / zoom.value)
+    x: Math.round((event.clientX - rect.left) / zoom.value),
+    y: Math.round((event.clientY - rect.top) / zoom.value)
+  }
+}
+
+// ← Конвертация мировых координат в экранные (для рендеринга на canvas)
+const worldToScreen = (worldX, worldY) => {
+  if (!boardRef.value) return { x: 0, y: 0 }
+  const rect = boardRef.value.getBoundingClientRect()
+  return {
+    x: (worldX * zoom.value) + rect.left,
+    y: (worldY * zoom.value) + rect.top
   }
 }
 
 const startDrawing = (event) => {
   if (currentTool.value !== 'draw' || !drawCanvasRef.value) return
   event.preventDefault()
+  event.stopPropagation()
   isDrawing.value = true
   lastPoint.value = getBoardCoordinates(event)
-  const ctx = drawCanvasRef.value.getContext('2d')
-  ctx.beginPath()
-  ctx.moveTo(lastPoint.value.x, lastPoint.value.y)
+  
+  // ← Сохранить точку в массив (мировые координаты)
+  drawings.value.push({
+    id: `draw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    type: 'line',
+    from: { ...lastPoint.value },
+    to: { ...lastPoint.value },
+    color: brushColor.value,
+    size: brushSize.value
+  })
+  
+  redrawCanvas()  // ← Перерисовать сразу
 }
 
 const draw = (event) => {
   if (!isDrawing.value || currentTool.value !== 'draw' || !drawCanvasRef.value) return
   event.preventDefault()
+  event.stopPropagation()
+  
   const point = getBoardCoordinates(event)
-  const ctx = drawCanvasRef.value.getContext('2d')
-  ctx.strokeStyle = brushColor.value
-  ctx.lineWidth = Math.max(1, brushSize.value / zoom.value)
-  ctx.lineTo(point.x, point.y)
-  ctx.stroke()
-  drawings.value.push({
-    id: `draw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    type: 'line',
-    from: { ...lastPoint.value },
-    to: { ...point },
-    color: brushColor.value,
-    size: brushSize.value
-  })
+  
+  // ← Обновить последнюю точку в массиве
+  const lastDrawing = drawings.value[drawings.value.length - 1]
+  if (lastDrawing) {
+    lastDrawing.to = { ...point }
+  }
+  
   lastPoint.value = point
+  redrawCanvas()  // ← Перерисовать каждый кадр
 }
 
 const stopDrawing = () => {
   if (!isDrawing.value) return
   isDrawing.value = false
   lastPoint.value = null
-  if (drawCanvasRef.value) {
-    drawCanvasRef.value.getContext('2d').closePath()
-  }
 }
 
 const eraseAtPoint = (event) => {
   if (currentTool.value !== 'erase') return
   const point = getBoardCoordinates(event)
-  const eraseRadius = 30 / zoom.value
+  const eraseRadius = 30  // ← Убрать деление на zoom
   const beforeCount = drawings.value.length
   drawings.value = drawings.value.filter(d => {
     const dist = Math.sqrt(
@@ -149,17 +174,28 @@ const eraseAtPoint = (event) => {
   }
 }
 
+// ← Полная перерисовка всех рисунков
 const redrawCanvas = () => {
   if (!drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
   const ctx = canvas.getContext('2d')
+  
+  // Очистить canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height)
+  
+  // Нарисовать все рисунки
   drawings.value.forEach(d => {
+    // ← Конвертировать мировые координаты в экранные
+    const from = worldToScreen(d.from.x, d.from.y)
+    const to = worldToScreen(d.to.x, d.to.y)
+    
     ctx.beginPath()
-    ctx.moveTo(d.from.x, d.from.y)
-    ctx.lineTo(d.to.x, d.to.y)
+    ctx.moveTo(from.x, from.y)
+    ctx.lineTo(to.x, to.y)
     ctx.strokeStyle = d.color
-    ctx.lineWidth = Math.max(1, d.size / zoom.value)
+    ctx.lineWidth = Math.max(1, d.size)  // ← Убрать деление на zoom
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
     ctx.stroke()
   })
 }
@@ -186,7 +222,6 @@ const addCardToBoard = (card, event) => {
 const handleBoardMouseDown = (event) => {
   if (event.target.closest('.game-object')) return
   if (event.target.closest('.toolbar')) return
-
   if (currentTool.value === 'select') {
     startSelection(event)
   } else if (currentTool.value === 'draw') {
@@ -217,7 +252,6 @@ const handleObjectMove = ({ objectId, position }) => {
   const obj = objects.value.find(o => o.id === objectId)
   if (obj) {
     obj.position = position
-    // Перемещать все выделенные объекты относительно первого
     if (selectedObjects.value.has(objectId)) {
       const offsetX = position.x - (obj.lastPosition?.x || position.x)
       const offsetY = position.y - (obj.lastPosition?.y || position.y)
@@ -232,7 +266,6 @@ const handleObjectMove = ({ objectId, position }) => {
     obj.lastPosition = { ...position }
   }
 }
-
 
 const selectCardToAdd = (card) => {
   selectedCard.value = card
@@ -305,7 +338,6 @@ const handleBoardClick = (event) => {
 const startSelection = (event) => {
   if (currentTool.value !== 'select') return
   if (event.target.closest('.game-object')) return
-
   const pos = getBoardCoordinates(event)
   isSelecting.value = true
   selectionStart.value = { x: pos.x, y: pos.y }
@@ -321,42 +353,35 @@ const updateSelection = (event) => {
 const endSelection = () => {
   if (!isSelecting.value) return
   isSelecting.value = false
-
   const minX = Math.min(selectionStart.value.x, selectionEnd.value.x)
   const maxX = Math.max(selectionStart.value.x, selectionEnd.value.x)
   const minY = Math.min(selectionStart.value.y, selectionEnd.value.y)
   const maxY = Math.max(selectionStart.value.y, selectionEnd.value.y)
-
   objects.value.forEach(obj => {
     const objX = obj.position.x
     const objY = obj.position.y
     const objRight = objX + (obj.width || 100)
     const objBottom = objY + (obj.height || 100)
-
     if (objX >= minX && objX <= maxX && objY >= minY && objY <= maxY) {
       selectedObjects.value.add(obj.id)
     } else if (objRight >= minX && objRight <= maxX && objBottom >= minY && objBottom <= maxY) {
       selectedObjects.value.add(obj.id)
     }
   })
-
   selectionStart.value = { x: 0, y: 0 }
   selectionEnd.value = { x: 0, y: 0 }
 }
 
 const handleKeyDown = (event) => {
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return
-
   if (event.key === 'Escape') {
     selectedObjects.value.clear()
     isSelecting.value = false
   }
-
   if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
     handleObjectDelete()
   }
-
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
     event.preventDefault()
     objects.value.forEach(obj => selectedObjects.value.add(obj.id))
@@ -368,6 +393,12 @@ const setTool = (tool) => {
   if (tool !== 'addCard') {
     selectedCard.value = null
   }
+}
+
+// ← Обработка изменения размера окна
+const handleResize = () => {
+  initDrawCanvas()
+  redrawCanvas()
 }
 
 defineExpose({
@@ -389,24 +420,25 @@ onMounted(() => {
   window.addEventListener('mouseup', handleBoardMouseUp)
   window.addEventListener('mousemove', handleBoardMouseMove)
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', handleResize)  // ← Слушать resize
 })
 
 onUnmounted(() => {
   window.removeEventListener('mouseup', handleBoardMouseUp)
   window.removeEventListener('mousemove', handleBoardMouseMove)
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
-
-
-
 <template>
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
+    <!-- Canvas ЗАФИКСИРОВАН на экране (вне boardRef) -->
+    <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
+
     <div ref="boardContainerRef" class="absolute inset-0 board-pan-area z-0" @click="handleBoardClick"
       @mousedown="handleBoardMouseDown">
       <div ref="boardRef" class="board-background" :style="gridStyles">
-        <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0" style="z-index: 10; pointer-events: none;" />
         <div v-if="isSelecting" class="absolute border-2 border-violet-400 bg-violet-500/20 pointer-events-none" :style="{
           left: Math.min(selectionStart.x, selectionEnd.x) + 'px',
           top: Math.min(selectionStart.y, selectionEnd.y) + 'px',
@@ -414,7 +446,6 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
-
         <GameObject v-for="obj in objects" :key="obj.id" :object="obj" :is-selected="selectedObjects.has(obj.id)"
           :is-draggable="currentTool === 'select'" :is-resizable="obj.resizable !== false" :zoom="zoom"
           :grid-size="gridSize" :snap-to-grid="false" @select="handleObjectSelect" @move="handleObjectMove"
