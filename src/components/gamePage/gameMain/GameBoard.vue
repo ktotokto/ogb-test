@@ -4,6 +4,7 @@ import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
 import { useGameBoardPan } from '@/composables/useGameBoardPan'
 import GameObject from './GameObject.vue'
+import CardEditor from './CardEditor.vue'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
@@ -14,12 +15,13 @@ const drawCanvasRef = ref(null)
 const selectedObjects = ref(new Set())
 const showGrid = ref(true)
 const gridSize = ref(50)
+const stackMode = ref(false)
+const stackSourceId = ref(null)
 
 const currentTool = ref('select')
 const brushColor = ref('#8b5cf6')
 const brushSize = ref(3)
 const isDrawing = ref(false)
-const lastPoint = ref(null)
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
 const selectionEnd = ref({ x: 0, y: 0 })
@@ -32,13 +34,13 @@ const {
   zoomOut,
   resetZoom,
   setZoom
-} = useGameBoardPan(boardRef, currentTool, { 
+} = useGameBoardPan(boardRef, currentTool, {
   enabled: true,
   onZoomChange: () => {
-    redrawCanvas()  
+    redrawCanvas()
   },
   onPanChange: () => {
-    redrawCanvas()  
+    redrawCanvas()
   }
 })
 
@@ -47,12 +49,28 @@ const currentUser = computed(() => userStore.currentUser)
 const objects = ref([])
 const drawings = ref([])
 
-const cardDeck = [
-  { id: 'card_attack', name: 'Attack', type: 'attack' },
-  { id: 'card_defense', name: 'Defense', type: 'defense' },
-  { id: 'card_magic', name: 'Magic', type: 'magic' },
-  { id: 'card_heal', name: 'Heal', type: 'heal' },
-]
+const cardDeck = ref([
+  { id: 'card_1', name: 'Attack', type: 'attack', frontImage: null, backImage: null },
+  { id: 'card_2', name: 'Defense', type: 'defense', frontImage: null, backImage: null },
+  { id: 'card_3', name: 'Magic', type: 'magic', frontImage: null, backImage: null },
+  { id: 'card_4', name: 'Heal', type: 'heal', frontImage: null, backImage: null },
+])
+
+const editingCard = ref(null)
+
+// Вычисляем количество карт в каждой стопке
+const objectsWithStackCount = computed(() => {
+  const stackCounts = {}
+  objects.value.forEach(obj => {
+    if (obj.stackId) {
+      stackCounts[obj.stackId] = (stackCounts[obj.stackId] || 0) + 1
+    }
+  })
+  return objects.value.map(obj => ({
+    ...obj,
+    _stackCount: obj.stackId ? (stackCounts[obj.stackId] || 0) : 0
+  }))
+})
 
 const showCardPanel = ref(false)
 const selectedCard = ref(null)
@@ -81,36 +99,20 @@ const cursorStyle = computed(() => {
   return cursors[currentTool.value] || 'default'
 })
 
-// ← Canvas размером с экран (не 100000!)
 const initDrawCanvas = () => {
   if (!drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
-  const ctx = canvas.getContext('2d')
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  ctx.strokeStyle = brushColor.value
-  ctx.lineWidth = brushSize.value
 }
 
-// ← Конвертация экранных координат в мировые (board coordinates)
-const getBoardCoordinates = (event) => {
-  if (!boardRef.value) return { x: 0, y: 0 }
-  const rect = boardRef.value.getBoundingClientRect()
+// ← Мировые координаты из события мыши
+const getWorldPos = (event) => {
+  if (!drawCanvasRef.value) return { x: 50000, y: 50000 }
+  const canvasRect = drawCanvasRef.value.getBoundingClientRect()
   return {
-    x: Math.round((event.clientX - rect.left) / zoom.value),
-    y: Math.round((event.clientY - rect.top) / zoom.value)
-  }
-}
-
-// ← Конвертация мировых координат в экранные (для рендеринга на canvas)
-const worldToScreen = (worldX, worldY) => {
-  if (!boardRef.value) return { x: 0, y: 0 }
-  const rect = boardRef.value.getBoundingClientRect()
-  return {
-    x: (worldX * zoom.value) + rect.left,
-    y: (worldY * zoom.value) + rect.top
+    x: (event.clientX - canvasRect.left + 50000 - panOffset.value.x) / zoom.value,
+    y: (event.clientY - canvasRect.top + 50000 - panOffset.value.y) / zoom.value
   }
 }
 
@@ -119,100 +121,110 @@ const startDrawing = (event) => {
   event.preventDefault()
   event.stopPropagation()
   isDrawing.value = true
-  lastPoint.value = getBoardCoordinates(event)
-  
-  // ← Сохранить точку в массив (мировые координаты)
+  const pos = getWorldPos(event)
+
   drawings.value.push({
     id: `draw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    type: 'line',
-    from: { ...lastPoint.value },
-    to: { ...lastPoint.value },
+    type: 'freehand',
+    points: [{ x: pos.x, y: pos.y }],
     color: brushColor.value,
     size: brushSize.value
   })
-  
-  redrawCanvas()  // ← Перерисовать сразу
+
+  redrawCanvas()
 }
 
 const draw = (event) => {
   if (!isDrawing.value || currentTool.value !== 'draw' || !drawCanvasRef.value) return
   event.preventDefault()
   event.stopPropagation()
-  
-  const point = getBoardCoordinates(event)
-  
-  // ← Обновить последнюю точку в массиве
-  const lastDrawing = drawings.value[drawings.value.length - 1]
-  if (lastDrawing) {
-    lastDrawing.to = { ...point }
+
+  const pos = getWorldPos(event)
+  const currentStroke = drawings.value[drawings.value.length - 1]
+  if (currentStroke) {
+    currentStroke.points.push({ x: pos.x, y: pos.y })
   }
-  
-  lastPoint.value = point
-  redrawCanvas()  // ← Перерисовать каждый кадр
+
+  redrawCanvas()
 }
 
 const stopDrawing = () => {
   if (!isDrawing.value) return
   isDrawing.value = false
-  lastPoint.value = null
 }
 
-const eraseAtPoint = (event) => {
+const eraseAtWorldPos = (worldX, worldY) => {
   if (currentTool.value !== 'erase') return
-  const point = getBoardCoordinates(event)
-  const eraseRadius = 30  // ← Убрать деление на zoom
+  const eraseRadius = (brushSize.value * 5) / zoom.value
   const beforeCount = drawings.value.length
   drawings.value = drawings.value.filter(d => {
-    const dist = Math.sqrt(
-      Math.pow(d.to.x - point.x, 2) +
-      Math.pow(d.to.y - point.y, 2)
-    )
-    return dist > eraseRadius
+    return !d.points.some(p => {
+      const dist = Math.sqrt(Math.pow(p.x - worldX, 2) + Math.pow(p.y - worldY, 2))
+      return dist <= eraseRadius
+    })
   })
   if (drawings.value.length !== beforeCount) {
     redrawCanvas()
   }
 }
 
-// ← Полная перерисовка всех рисунков
+// ← Полная перерисовка: ctx.setTransform
 const redrawCanvas = () => {
   if (!drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
   const ctx = canvas.getContext('2d')
-  
-  // Очистить canvas
+
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  
-  // Нарисовать все рисунки
+
+  const offsetX = panOffset.value.x - 50000 * zoom.value
+  const offsetY = panOffset.value.y - 50000 * zoom.value
+  ctx.setTransform(zoom.value, 0, 0, zoom.value, offsetX, offsetY)
+
   drawings.value.forEach(d => {
-    // ← Конвертировать мировые координаты в экранные
-    const from = worldToScreen(d.from.x, d.from.y)
-    const to = worldToScreen(d.to.x, d.to.y)
-    
+    if (d.points.length < 2) return
+
     ctx.beginPath()
-    ctx.moveTo(from.x, from.y)
-    ctx.lineTo(to.x, to.y)
     ctx.strokeStyle = d.color
-    ctx.lineWidth = Math.max(1, d.size)  // ← Убрать деление на zoom
+    ctx.lineWidth = d.size
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
+
+    ctx.moveTo(d.points[0].x, d.points[0].y)
+
+    if (d.points.length === 2) {
+      ctx.lineTo(d.points[1].x, d.points[1].y)
+    } else {
+      for (let i = 1; i < d.points.length - 1; i++) {
+        const midX = (d.points[i].x + d.points[i + 1].x) / 2
+        const midY = (d.points[i].y + d.points[i + 1].y) / 2
+        ctx.quadraticCurveTo(d.points[i].x, d.points[i].y, midX, midY)
+      }
+      const last = d.points[d.points.length - 1]
+      ctx.lineTo(last.x, last.y)
+    }
+
     ctx.stroke()
   })
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
 }
 
 const addCardToBoard = (card, event) => {
-  const pos = getBoardCoordinates(event)
+  const world = getWorldPos(event)
   const newCard = {
     id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     type: 'card',
     label: card.name,
-    position: { x: pos.x - 60, y: pos.y - 90 },
+    position: { x: world.x - 60, y: world.y - 90 },
     width: 120,
     height: 180,
     rotation: 0,
     owner: currentUser.value?.id || 'user',
     resizable: true,
-    cardData: card
+    faceUp: true,
+    stackId: null,
+    stackIndex: 0,
+    cardData: { ...card }
   }
   objects.value.push(newCard)
   showCardPanel.value = false
@@ -227,7 +239,8 @@ const handleBoardMouseDown = (event) => {
   } else if (currentTool.value === 'draw') {
     startDrawing(event)
   } else if (currentTool.value === 'erase') {
-    eraseAtPoint(event)
+    const world = getWorldPos(event)
+    eraseAtWorldPos(world.x, world.y)
   } else if (currentTool.value === 'addCard' && selectedCard.value) {
     addCardToBoard(selectedCard.value, event)
   }
@@ -239,7 +252,8 @@ const handleBoardMouseMove = (event) => {
   } else if (currentTool.value === 'draw') {
     draw(event)
   } else if (currentTool.value === 'erase') {
-    eraseAtPoint(event)
+    const world = getWorldPos(event)
+    eraseAtWorldPos(world.x, world.y)
   }
 }
 
@@ -274,6 +288,14 @@ const selectCardToAdd = (card) => {
 }
 
 const handleObjectSelect = (object, event) => {
+  // Если режим стопки — добавляем к стопке
+  if (stackMode.value && stackSourceId.value && object.id !== stackSourceId.value) {
+    handleStackAdd(stackSourceId.value, object.id)
+    stackMode.value = false
+    stackSourceId.value = null
+    return
+  }
+
   if (event?.ctrlKey || event?.metaKey) {
     if (selectedObjects.value.has(object.id)) {
       selectedObjects.value.delete(object.id)
@@ -327,6 +349,68 @@ const handleObjectRotate = ({ objectId, rotation }) => {
   }
 }
 
+const handleCardFlip = (objectId) => {
+  const obj = objects.value.find(o => o.id === objectId)
+  if (obj) obj.faceUp = !obj.faceUp
+}
+
+const enterStackMode = (objectId) => {
+  stackMode.value = true
+  stackSourceId.value = objectId
+  selectedObjects.value.clear()
+  selectedObjects.value.add(objectId)
+}
+
+const handleStackAdd = (targetId, sourceId) => {
+  const target = objects.value.find(o => o.id === targetId)
+  const source = objects.value.find(o => o.id === sourceId)
+  if (!target || !source) return
+
+  const stackId = target.stackId || target.id
+  target.stackId = stackId
+  source.stackId = stackId
+
+  const stackCards = objects.value.filter(o => o.stackId === stackId)
+  stackCards.forEach((card, i) => {
+    card.stackIndex = i
+  })
+}
+
+const handleStackRemove = (objectId) => {
+  const obj = objects.value.find(o => o.id === objectId)
+  if (!obj || !obj.stackId) return
+
+  const stackCards = objects.value.filter(o => o.stackId === obj.stackId && o.id !== objectId)
+  const oldStackId = obj.stackId
+
+  obj.stackId = null
+  obj.stackIndex = 0
+
+  if (stackCards.length > 0) {
+    stackCards.forEach((card, i) => {
+      card.stackIndex = i
+    })
+  }
+}
+
+const openCardEditor = (card) => {
+  editingCard.value = card
+}
+
+const saveCardToDeck = (updatedCard) => {
+  const idx = cardDeck.value.findIndex(c => c.id === updatedCard.id)
+  if (idx !== -1) {
+    cardDeck.value[idx] = { ...updatedCard }
+  }
+  objects.value.forEach(obj => {
+    if (obj.cardData && obj.cardData.id === updatedCard.id) {
+      obj.cardData = { ...updatedCard }
+      obj.label = updatedCard.name
+    }
+  })
+  editingCard.value = null
+}
+
 const handleBoardClick = (event) => {
   if (event.target === boardRef.value || event.target.classList.contains('board-background')) {
     if (!isSelecting.value) {
@@ -338,16 +422,16 @@ const handleBoardClick = (event) => {
 const startSelection = (event) => {
   if (currentTool.value !== 'select') return
   if (event.target.closest('.game-object')) return
-  const pos = getBoardCoordinates(event)
+  const world = getWorldPos(event)
   isSelecting.value = true
-  selectionStart.value = { x: pos.x, y: pos.y }
-  selectionEnd.value = { x: pos.x, y: pos.y }
+  selectionStart.value = { x: world.x, y: world.y }
+  selectionEnd.value = { x: world.x, y: world.y }
 }
 
 const updateSelection = (event) => {
   if (!isSelecting.value) return
-  const pos = getBoardCoordinates(event)
-  selectionEnd.value = { x: pos.x, y: pos.y }
+  const world = getWorldPos(event)
+  selectionEnd.value = { x: world.x, y: world.y }
 }
 
 const endSelection = () => {
@@ -377,6 +461,10 @@ const handleKeyDown = (event) => {
   if (event.key === 'Escape') {
     selectedObjects.value.clear()
     isSelecting.value = false
+    if (stackMode.value) {
+      stackMode.value = false
+      stackSourceId.value = null
+    }
   }
   if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
@@ -420,7 +508,7 @@ onMounted(() => {
   window.addEventListener('mouseup', handleBoardMouseUp)
   window.addEventListener('mousemove', handleBoardMouseMove)
   window.addEventListener('keydown', handleKeyDown)
-  window.addEventListener('resize', handleResize)  // ← Слушать resize
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
@@ -446,19 +534,25 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
-        <GameObject v-for="obj in objects" :key="obj.id" :object="obj" :is-selected="selectedObjects.has(obj.id)"
+        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj" :is-selected="selectedObjects.has(obj.id)"
           :is-draggable="currentTool === 'select'" :is-resizable="obj.resizable !== false" :zoom="zoom"
           :grid-size="gridSize" :snap-to-grid="false" @select="handleObjectSelect" @move="handleObjectMove"
-          @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" />
+          @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate"
+          @flip="handleCardFlip" @stack-mode="enterStackMode" @stack-remove="handleStackRemove" />
       </div>
     </div>
     <div
       class="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-violet-500/30 text-sm text-violet-300 toolbar z-50">
-      {{ currentTool === 'select' && `Select Tool — ${selectedObjects.size} selected — Ctrl+Click to multi-select` }}
-      {{ currentTool === 'pan' && 'Pan Tool - Hold Alt + Drag' }}
-      {{ currentTool === 'draw' && 'Draw Tool - Click and Drag' }}
-      {{ currentTool === 'erase' && 'Erase Tool - Click and Drag' }}
-      {{ currentTool === 'addCard' && 'Add Card Tool - Click on Board' }}
+      <template v-if="stackMode">
+        🔗 Режим стопки — кликните на другую карту, чтобы добавить в стопку (Esc — отмена)
+      </template>
+      <template v-else>
+        {{ currentTool === 'select' && `Select Tool — ${selectedObjects.size} selected — Ctrl+Click to multi-select` }}
+        {{ currentTool === 'pan' && 'Pan Tool - Hold Alt + Drag' }}
+        {{ currentTool === 'draw' && 'Draw Tool - Click and Drag' }}
+        {{ currentTool === 'erase' && 'Erase Tool - Click and Drag' }}
+        {{ currentTool === 'addCard' && 'Add Card Tool - Click on Board' }}
+      </template>
     </div>
 
     <div class="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 toolbar z-50">
@@ -523,7 +617,7 @@ onUnmounted(() => {
     </div>
 
     <div v-if="showCardPanel"
-      class="absolute left-24 top-1/2 -translate-y-1/2 w-64 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
+      class="absolute left-24 top-1/2 -translate-y-1/2 w-72 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
       <div class="flex items-center justify-between mb-4">
         <h3 class="font-bold text-white">Select Card</h3>
         <button @click="showCardPanel = false" class="text-slate-400 hover:text-white">
@@ -534,13 +628,33 @@ onUnmounted(() => {
       </div>
 
       <div class="space-y-2">
-        <button v-for="card in cardDeck" :key="card.id" @click="selectCardToAdd(card)"
-          class="w-full p-3 rounded-xl bg-slate-700/50 hover:bg-slate-700 flex items-center gap-3 transition-all border border-white/5 hover:border-violet-500/50">
-          <div
-            class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white font-bold">
-            {{ card.name[0] }}
-          </div>
-          <span class="font-medium text-slate-200">{{ card.name }}</span>
+        <div v-for="card in cardDeck" :key="card.id" class="flex gap-2">
+          <button @click="selectCardToAdd(card)"
+            class="flex-1 p-3 rounded-xl bg-slate-700/50 hover:bg-slate-700 flex items-center gap-3 transition-all border border-white/5 hover:border-violet-500/50">
+            <div v-if="card.frontImage" class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+              <img :src="card.frontImage" class="w-full h-full object-cover" />
+            </div>
+            <div v-else
+              class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+              {{ card.name[0] }}
+            </div>
+            <span class="font-medium text-slate-200 text-sm">{{ card.name }}</span>
+          </button>
+          <button @click="openCardEditor(card)"
+            class="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-violet-600/30 flex items-center justify-center text-slate-400 hover:text-violet-300 transition-all border border-white/5 hover:border-violet-500/50 flex-shrink-0"
+            title="Редактировать карту">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex gap-2 mt-3">
+        <button @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
+          class="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-medium transition-all border border-emerald-500/30">
+          + Добавить карту
         </button>
       </div>
 
@@ -588,6 +702,9 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
+
+    <!-- Card Editor Modal -->
+    <CardEditor v-if="editingCard" :card="editingCard" @save="saveCardToDeck" @close="editingCard = null" />
   </div>
 </template>
 
@@ -616,5 +733,14 @@ onUnmounted(() => {
 
 .toolbar {
   pointer-events: auto;
+}
+
+/* Стили для drag карты */
+.game-object[draggable="true"] {
+  cursor: grab;
+}
+
+.game-object[draggable="true"]:active {
+  cursor: grabbing;
 }
 </style>

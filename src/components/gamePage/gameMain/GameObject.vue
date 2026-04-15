@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
-import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2 } from 'lucide-vue-next'
+import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2, FlipVertical, Layers } from 'lucide-vue-next'
 
 const props = defineProps({
   object: { type: Object, required: true },
@@ -15,7 +15,8 @@ const props = defineProps({
 
 const emit = defineEmits([
   'select', 'move', 'resize', 'delete',
-  'duplicate', 'rotate', 'drag-start', 'drag-end'
+  'duplicate', 'rotate', 'drag-start', 'drag-end',
+  'flip', 'stack-mode', 'stack-remove'
 ])
 
 const objectRef = ref(null)
@@ -58,11 +59,11 @@ watch(() => props.object.position, (newPos) => {
 const objectStyles = computed(() => ({
   width: `${props.object.width || 100}px`,
   height: `${props.object.height || 100}px`,
-  zIndex: props.object.zIndex || 1
+  zIndex: props.object.stackId ? (props.object.stackIndex + 1) * 10 : (props.object.zIndex || 1)
 }))
 
 const getObjectIcon = (type) => {
-  const icons = { card: 'Карта', dice: 'Кубик', token: 'Токен', model: 'Модель', image: 'Картинка', text: 'Текст' }
+  const icons = { card: '🎴', dice: 'Кубик', token: 'Токен', model: 'Модель', image: 'Картинка', text: 'Текст' }
   return icons[type] || '_да_'
 }
 
@@ -88,41 +89,99 @@ const handleDuplicate = () => {
 const handleRotate = () => {
   emit('rotate', { objectId: props.object.id, rotation: ((props.object.rotation || 0) + 90) % 360 })
 }
+const handleFlip = () => {
+  emit('flip', props.object.id)
+  showContextMenu.value = false
+}
 const closeContextMenu = () => { showContextMenu.value = false }
+
+// Счётчик карт в стопке
+const stackCount = computed(() => {
+  if (!props.object.stackId) return 0
+  // Вычисляется в родительском компоненте
+  return props.object._stackCount || 0
+})
+
+const isTopOfStack = computed(() => {
+  if (!props.object.stackId) return false
+  return props.object.stackIndex === Math.max(0, stackCount.value - 1)
+})
 </script>
 
 <template>
   <div ref="objectRef" class="absolute select-none game-object group" :style="objectStyles" @click="handleClick"
     @contextmenu="handleContextMenu" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
-    <div class="w-full h-full rounded-2xl transition-all duration-300 relative overflow-hidden" :class="[
+    <div class="w-full h-full rounded-2xl transition-all duration-300 relative" :class="[
       isSelected
         ? 'ring-2 ring-violet-400 shadow-[0_0_40px_rgba(139,92,246,0.5)] scale-105'
         : 'hover:shadow-[0_0_30px_rgba(139,92,246,0.3)]',
       isDragging ? 'cursor-grabbing z-50' : 'cursor-grab',
       isHovered && !isSelected && 'ring-1 ring-violet-500/50'
     ]" :style="{
-        background: isSelected
-          ? 'linear-gradient(135deg, rgba(139,92,246,0.3), rgba(6,182,212,0.3))'
-          : 'linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9))',
         backdropFilter: 'blur(12px)',
         border: isSelected ? '2px solid rgba(139,92,246,0.8)' : '1px solid rgba(255,255,255,0.1)',
-        rotate: `${props.object.rotation}deg`
-
+        rotate: `${props.object.rotation}deg`,
+        transition: object.faceUp === false ? 'transform 0.3s' : 'none',
+        transformStyle: 'preserve-3d'
       }">
+      <!-- Stack offset visual effect -->
+      <template v-if="object.stackId && !isTopOfStack">
+        <div class="absolute inset-0 rounded-2xl bg-slate-700/50" :style="{
+          transform: `translate(${-(stackCount - stackIndex - 1) * 2}px, ${-(stackCount - stackIndex - 1) * 2}px)`
+        }"></div>
+      </template>
+
       <div
         class="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
       </div>
 
-      <div v-if="isSelected && !isDragging" class="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+      <div v-if="isSelected && !isDragging" class="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
         <div class="px-3 py-1 rounded-full glass bg-violet-500/20 border border-violet-500/50 text-xs text-violet-300">
           {{ object.label || object.type }}
         </div>
       </div>
 
-      <div class="w-full h-full flex items-center justify-center p-3 relative">
-        <template v-if="object.type === 'image' && object.url">
+      <!-- Stack badge -->
+      <div v-if="stackCount > 1"
+        class="absolute -top-2 -right-2 z-20 w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center shadow-lg">
+        {{ stackCount }}
+      </div>
+
+      <!-- Card content -->
+      <div class="w-full h-full flex items-center justify-center relative">
+        <!-- Card type: render with flip -->
+        <template v-if="object.type === 'card'">
+          <!-- Face up -->
+          <div v-if="object.faceUp !== false"
+            class="w-full h-full flex flex-col items-center justify-center p-2">
+            <template v-if="object.cardData?.frontImage">
+              <img :src="object.cardData.frontImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
+            </template>
+            <template v-else>
+              <div class="text-3xl filter drop-shadow-lg">🎴</div>
+              <div v-if="object.label" class="absolute bottom-2 left-0 right-0 text-center">
+                <span class="text-xs font-medium px-2 py-1 rounded-full glass text-slate-300">
+                  {{ object.label }}
+                </span>
+              </div>
+            </template>
+          </div>
+          <!-- Face down (card back) -->
+          <div v-else
+            class="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-700 to-cyan-700 rounded-xl">
+            <div v-if="object.cardData?.backImage">
+              <img :src="object.cardData.backImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
+            </div>
+            <div v-else class="text-5xl opacity-50">🎴</div>
+          </div>
+        </template>
+
+        <!-- Image type -->
+        <template v-else-if="object.type === 'image' && object.url">
           <img :src="object.url" class="w-full h-full object-contain rounded-lg" draggable="false" />
         </template>
+
+        <!-- Default: icon + label -->
         <template v-else>
           <div class="text-5xl filter drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300">
             {{ getObjectIcon(object.type) }}
@@ -150,8 +209,18 @@ const closeContextMenu = () => { showContextMenu.value = false }
         </div>
       </template>
 
-      <div v-if="isSelected && !isDragging"
-        class="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-1 glass-strong rounded-xl p-1.5 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+      <!-- Floating actions (всегда для карт при hover) -->
+      <div class="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-1 glass-strong rounded-xl p-1.5 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-30">
+        <button v-if="object.type === 'card'" @click.stop="handleFlip"
+          class="p-2 rounded-lg hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 transition-colors"
+          :title="object.faceUp === false ? 'Повернуть лицом вверх' : 'Повернуть лицом вниз'">
+          <FlipVertical class="w-4 h-4" />
+        </button>
+        <button v-if="object.type === 'card'" @click.stop="emit('stack-mode', object.id)"
+          class="p-2 rounded-lg hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition-colors"
+          title="Добавить в стопку">
+          <Layers class="w-4 h-4" />
+        </button>
         <button @click.stop="handleRotate"
           class="p-2 rounded-lg hover:bg-violet-500/20 text-slate-300 hover:text-violet-300 transition-colors"
           title="Повернуть">
@@ -180,6 +249,14 @@ const closeContextMenu = () => { showContextMenu.value = false }
         <button @click="handleDuplicate"
           class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-violet-500/10 hover:text-violet-300 flex items-center gap-3 transition-colors">
           <Copy class="w-4 h-4" /> Копировать
+        </button>
+        <button v-if="object.type === 'card'" @click="handleFlip"
+          class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-amber-500/10 hover:text-amber-300 flex items-center gap-3 transition-colors">
+          <FlipVertical class="w-4 h-4" /> {{ object.faceUp === false ? 'Лицом вверх' : 'Лицом вниз' }}
+        </button>
+        <button v-if="object.stackId" @click="emit('stack-remove', object.id); showContextMenu.value = false"
+          class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-orange-500/10 hover:text-orange-300 flex items-center gap-3 transition-colors">
+          <Layers class="w-4 h-4" /> Убрать из стопки
         </button>
         <button @click="handleRotate"
           class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-300 flex items-center gap-3 transition-colors">
