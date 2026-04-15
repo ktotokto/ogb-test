@@ -48,7 +48,7 @@ const handleSetTool = (tool) => {
       </aside>
 
       <main class="flex-1 relative bg-slate-950 overflow-hidden">
-        <GameMain ref="gameBoardRef" />
+        <GameMain ref="gameBoardRef"  oncontextmenu="return false;" />
         <GameHand />
       </main>
     </div>

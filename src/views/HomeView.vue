@@ -11,7 +11,7 @@ const createGame = () => {
 
 const features = [
   { icon: Gamepad2, title: 'Играй онлайн', desc: 'Создавай игровые сессии' },
-  { icon: Users, title: 'Играй с друзьями', desc: 'Приглашай до 50 игроков' },
+  { icon: Users, title: 'Играй с друзьями', desc: 'Приглашай до 1 игрока' },
   { icon: Zap, title: 'Быстро и удобно', desc: 'Мгновенная синхронизация' },
   { icon: Sparkles, title: 'Кастомизация', desc: 'Свои правила и объекты' }
 ]
@@ -19,14 +19,12 @@ const features = [
 
 <template>
   <div class="min-h-screen gradient-bg particle-bg flex items-center justify-center relative overflow-hidden">
-    <!-- Animated background elements -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
       <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl animate-pulse"></div>
       <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
     </div>
 
     <div class="relative z-10 max-w-6xl mx-auto px-6">
-      <!-- Hero Section -->
       <div class="text-center mb-16 animate-slide-in">
         <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6 animate-float">
           <Sparkles class="w-4 h-4 text-violet-400" />
@@ -55,7 +53,6 @@ const features = [
         </div>
       </div>
 
-      <!-- Features Grid -->
       <div class="grid md:grid-cols-4 gap-6 mt-20">
         <div v-for="(feature, index) in features" :key="index"
              class="card-glass p-6 text-center group hover:scale-105 transition-all duration-300">

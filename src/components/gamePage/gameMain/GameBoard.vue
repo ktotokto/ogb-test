@@ -25,6 +25,7 @@ const isDrawing = ref(false)
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
 const selectionEnd = ref({ x: 0, y: 0 })
+const handCards = ref([]);
 
 const {
   isPanning,
@@ -49,16 +50,12 @@ const currentUser = computed(() => userStore.currentUser)
 const objects = ref([])
 const drawings = ref([])
 
-const cardDeck = ref([
-  { id: 'card_1', name: 'Attack', type: 'attack', frontImage: null, backImage: null },
-  { id: 'card_2', name: 'Defense', type: 'defense', frontImage: null, backImage: null },
-  { id: 'card_3', name: 'Magic', type: 'magic', frontImage: null, backImage: null },
-  { id: 'card_4', name: 'Heal', type: 'heal', frontImage: null, backImage: null },
-])
+const cardDeck = ref([])
 
 const editingCard = ref(null)
 
-// Вычисляем количество карт в каждой стопке
+const zIndex = ref(0)
+
 const objectsWithStackCount = computed(() => {
   const stackCounts = {}
   objects.value.forEach(obj => {
@@ -71,6 +68,7 @@ const objectsWithStackCount = computed(() => {
     _stackCount: obj.stackId ? (stackCounts[obj.stackId] || 0) : 0
   }))
 })
+
 
 const showCardPanel = ref(false)
 const selectedCard = ref(null)
@@ -106,7 +104,6 @@ const initDrawCanvas = () => {
   canvas.height = window.innerHeight
 }
 
-// ← Мировые координаты из события мыши
 const getWorldPos = (event) => {
   if (!drawCanvasRef.value) return { x: 50000, y: 50000 }
   const canvasRect = drawCanvasRef.value.getBoundingClientRect()
@@ -168,7 +165,6 @@ const eraseAtWorldPos = (worldX, worldY) => {
   }
 }
 
-// ← Полная перерисовка: ctx.setTransform
 const redrawCanvas = () => {
   if (!drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
@@ -288,7 +284,6 @@ const selectCardToAdd = (card) => {
 }
 
 const handleObjectSelect = (object, event) => {
-  // Если режим стопки — добавляем к стопке
   if (stackMode.value && stackSourceId.value && object.id !== stackSourceId.value) {
     handleStackAdd(stackSourceId.value, object.id)
     stackMode.value = false
@@ -333,7 +328,7 @@ const handleObjectDuplicate = (object) => {
   objects.value.push({
     ...object,
     id: `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    position: { x: object.position.x, y: object.position.y}
+    position: { x: object.position.x, y: object.position.y }
   })
 }
 
@@ -483,7 +478,10 @@ const setTool = (tool) => {
   }
 }
 
-// ← Обработка изменения размера окна
+const handleCardAdded = (card) => {
+  handCards.value.push(card);
+};
+
 const handleResize = () => {
   initDrawCanvas()
   redrawCanvas()
@@ -521,7 +519,6 @@ onUnmounted(() => {
 
 <template>
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
-    <!-- Canvas ЗАФИКСИРОВАН на экране (вне boardRef) -->
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
 
     <div ref="boardContainerRef" class="absolute inset-0 board-pan-area z-0" @click="handleBoardClick"
@@ -534,17 +531,18 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
-        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj" :is-selected="selectedObjects.has(obj.id)"
-          :is-draggable="currentTool === 'select'" :is-resizable="obj.resizable !== false" :zoom="zoom"
-          :grid-size="gridSize" :snap-to-grid="false" @select="handleObjectSelect" @move="handleObjectMove"
-          @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate"
-          @flip="handleCardFlip" @stack-mode="enterStackMode" @stack-remove="handleStackRemove" />
+        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj"
+          :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
+          :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
+          @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
+          @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
+          @stack-mode="enterStackMode" @stack-remove="handleStackRemove" @add-card="handleCardAdded" />
       </div>
     </div>
     <div
       class="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-violet-500/30 text-sm text-violet-300 toolbar z-50">
       <template v-if="stackMode">
-        🔗 Режим стопки — кликните на другую карту, чтобы добавить в стопку (Esc — отмена)
+        Режим стопки — кликните на другую карту, чтобы добавить в стопку (Esc — отмена)
       </template>
       <template v-else>
         {{ currentTool === 'select' && `Select Tool — ${selectedObjects.size} selected — Ctrl+Click to multi-select` }}
@@ -619,7 +617,7 @@ onUnmounted(() => {
     <div v-if="showCardPanel"
       class="absolute left-24 top-1/2 -translate-y-1/2 w-72 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="font-bold text-white">Select Card</h3>
+        <h3 class="font-bold text-white">Редактор карт</h3>
         <button @click="showCardPanel = false" class="text-slate-400 hover:text-white">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -652,32 +650,43 @@ onUnmounted(() => {
       </div>
 
       <div class="flex gap-2 mt-3">
-        <button @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
+        <button
+          @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
           class="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-medium transition-all border border-emerald-500/30">
           + Добавить карту
         </button>
       </div>
 
-      <p class="text-xs text-slate-500 mt-3 text-center">Click on board to add</p>
+      <p class="text-xs text-slate-500 mt-3 text-center">Нажмите на карту, а после на поле, чтобы добавить ее на поле</p>
     </div>
 
     <div v-if="currentTool === 'draw'"
       class="absolute left-24 top-6 w-48 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
-      <h4 class="font-bold text-white mb-3">Brush Settings</h4>
+      <h4 class="font-bold text-white mb-3">Настройки кисти</h4>
 
       <div class="mb-3">
-        <label class="text-xs text-slate-400 mb-2 block">Color</label>
-        <div class="flex gap-2 flex-wrap">
+        <label class="text-xs text-slate-400 mb-2 block">Цвет</label>
+        <div class="flex gap-2 flex-wrap items-center">
           <button v-for="color in ['#8b5cf6', '#06b6d4', '#f43f5e', '#10b981', '#f59e0b', '#ffffff']" :key="color"
             @click="brushColor = color" :class="[
               'w-6 h-6 rounded-full border-2 transition-transform hover:scale-110',
               brushColor === color ? 'border-white scale-110' : 'border-transparent'
             ]" :style="{ background: color }" />
+
+          <div class="relative w-6 h-6 ml-1">
+            <input type="color" v-model="brushColor"
+              class="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
+            <div
+              class="w-6 h-6 rounded-full border-2 border-slate-600 flex items-center justify-center bg-gradient-to-tr from-indigo-500 via-pink-500 to-yellow-500 transition-transform hover:scale-110"
+              :class="{ 'border-white scale-110': !['#8b5cf6', '#06b6d4', '#f43f5e', '#10b981', '#f59e0b', '#ffffff'].includes(brushColor) }">
+              <span class="text-[10px] text-white pointer-events-none">+</span>
+            </div>
+          </div>
         </div>
       </div>
 
       <div>
-        <label class="text-xs text-slate-400 mb-2 block">Size: {{ brushSize }}px</label>
+        <label class="text-xs text-slate-400 mb-2 block">Ширина: {{ brushSize }}px</label>
         <input v-model="brushSize" type="range" min="1" max="20" class="w-full accent-violet-500" />
       </div>
     </div>
@@ -702,8 +711,6 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
-
-    <!-- Card Editor Modal -->
     <CardEditor v-if="editingCard" :card="editingCard" @save="saveCardToDeck" @close="editingCard = null" />
   </div>
 </template>

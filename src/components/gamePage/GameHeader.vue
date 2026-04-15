@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Clock, Save, UserPlus, LogOut, Wifi, WifiOff } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   sessionId: String
@@ -8,6 +9,7 @@ const props = defineProps({
 
 const time = ref(0)
 const isConnected = ref(true)
+const router = useRouter()
 
 const formattedTime = computed(() => {
   const hours = Math.floor(time.value / 3600)
@@ -19,6 +21,10 @@ const formattedTime = computed(() => {
     seconds: String(seconds).padStart(2, '0')
   }
 })
+
+const exitGame = () => {
+  router.push('/')
+}
 
 let intervalId = null
 
@@ -68,7 +74,7 @@ onUnmounted(() => {
         <UserPlus class="w-4 h-4" />
         <span class="font-medium">Пригласить</span>
       </button>
-      <button class="px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 hover:border-red-500/50 flex items-center gap-2.5">
+      <button @click="exitGame"  class="px-6 py-2.5 rounded-xl font-semibold transition-all duration-300 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 hover:border-red-500/50 flex items-center gap-2.5">
         <LogOut class="w-4 h-4" />
         <span class="font-medium">Выйти</span>
       </button>
