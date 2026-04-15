@@ -50,12 +50,25 @@ const currentUser = computed(() => userStore.currentUser)
 const objects = ref([])
 const drawings = ref([])
 
+<<<<<<< HEAD
 const cardDeck = ref([])
 
 const editingCard = ref(null)
 
 const zIndex = ref(0)
 
+=======
+const cardDeck = ref([
+  { id: 'card_1', name: 'Attack', type: 'attack', frontImage: null, backImage: null },
+  { id: 'card_2', name: 'Defense', type: 'defense', frontImage: null, backImage: null },
+  { id: 'card_3', name: 'Magic', type: 'magic', frontImage: null, backImage: null },
+  { id: 'card_4', name: 'Heal', type: 'heal', frontImage: null, backImage: null },
+])
+
+const editingCard = ref(null)
+
+// Вычисляем количество карт в каждой стопке
+>>>>>>> 2fa3402 (15)
 const objectsWithStackCount = computed(() => {
   const stackCounts = {}
   objects.value.forEach(obj => {
@@ -68,7 +81,10 @@ const objectsWithStackCount = computed(() => {
     _stackCount: obj.stackId ? (stackCounts[obj.stackId] || 0) : 0
   }))
 })
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2fa3402 (15)
 
 const showCardPanel = ref(false)
 const selectedCard = ref(null)
@@ -104,6 +120,10 @@ const initDrawCanvas = () => {
   canvas.height = window.innerHeight
 }
 
+<<<<<<< HEAD
+=======
+// ← Мировые координаты из события мыши
+>>>>>>> 2fa3402 (15)
 const getWorldPos = (event) => {
   if (!drawCanvasRef.value) return { x: 50000, y: 50000 }
   const canvasRect = drawCanvasRef.value.getBoundingClientRect()
@@ -165,6 +185,10 @@ const eraseAtWorldPos = (worldX, worldY) => {
   }
 }
 
+<<<<<<< HEAD
+=======
+// ← Полная перерисовка: ctx.setTransform
+>>>>>>> 2fa3402 (15)
 const redrawCanvas = () => {
   if (!drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
@@ -284,6 +308,10 @@ const selectCardToAdd = (card) => {
 }
 
 const handleObjectSelect = (object, event) => {
+<<<<<<< HEAD
+=======
+  // Если режим стопки — добавляем к стопке
+>>>>>>> 2fa3402 (15)
   if (stackMode.value && stackSourceId.value && object.id !== stackSourceId.value) {
     handleStackAdd(stackSourceId.value, object.id)
     stackMode.value = false
@@ -531,18 +559,30 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
+<<<<<<< HEAD
         <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
           @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
           @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
           @stack-mode="enterStackMode" @stack-remove="handleStackRemove" @add-card="handleCardAdded" />
+=======
+        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj" :is-selected="selectedObjects.has(obj.id)"
+          :is-draggable="currentTool === 'select'" :is-resizable="obj.resizable !== false" :zoom="zoom"
+          :grid-size="gridSize" :snap-to-grid="false" @select="handleObjectSelect" @move="handleObjectMove"
+          @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate"
+          @flip="handleCardFlip" @stack-mode="enterStackMode" @stack-remove="handleStackRemove" />
+>>>>>>> 2fa3402 (15)
       </div>
     </div>
     <div
       class="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-violet-500/30 text-sm text-violet-300 toolbar z-50">
       <template v-if="stackMode">
+<<<<<<< HEAD
         Режим стопки — кликните на другую карту, чтобы добавить в стопку (Esc — отмена)
+=======
+        🔗 Режим стопки — кликните на другую карту, чтобы добавить в стопку (Esc — отмена)
+>>>>>>> 2fa3402 (15)
       </template>
       <template v-else>
         {{ currentTool === 'select' && `Select Tool — ${selectedObjects.size} selected — Ctrl+Click to multi-select` }}
@@ -650,8 +690,12 @@ onUnmounted(() => {
       </div>
 
       <div class="flex gap-2 mt-3">
+<<<<<<< HEAD
         <button
           @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
+=======
+        <button @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
+>>>>>>> 2fa3402 (15)
           class="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-medium transition-all border border-emerald-500/30">
           + Добавить карту
         </button>
@@ -711,6 +755,11 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
+<<<<<<< HEAD
+=======
+
+    <!-- Card Editor Modal -->
+>>>>>>> 2fa3402 (15)
     <CardEditor v-if="editingCard" :card="editingCard" @save="saveCardToDeck" @close="editingCard = null" />
   </div>
 </template>
