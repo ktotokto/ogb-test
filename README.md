@@ -1,38 +1,109 @@
-# ogb-test
+# OGB — Онлайн настольная игра
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 + Vite фронтенд + Flask + Socket.IO бэкенд для онлайн-настольных игр.
 
-## Recommended IDE Setup
+## Стек
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+**Фронтенд:** Vue 3, Vite, Pinia, Vue Router, TailwindCSS, socket.io-client
+**Бэкенд:** Python, Flask, Flask-SocketIO, Flask-JWT-Extended, SQLAlchemy
 
-## Recommended Browser Setup
+## Быстрый старт
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+### 1. Фронтенд
 
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
 npm run dev
 ```
 
-### Compile and Minify for Production
+Откройте http://localhost:5173
 
-```sh
-npm run build
+### 2. Бэкенд
+
+**Windows:**
+```bash
+run-backend.bat
 ```
+
+**Вручную:**
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+python app.py
+```
+
+Бэкенд запустится на http://localhost:5000
+
+## Функционал
+
+### Авторизация
+- Регистрация и вход через `/auth`
+- JWT токены сохраняются в localStorage
+- Автоматическое подключение WebSocket при входе
+
+### Игровое поле
+- **Рисование** — плавные линии (quadraticCurveTo)
+- **Карты** — добавление, редактирование, переворот (face up/down)
+- **Стопки карт** — кнопка "Layers" на карте → клик на другую карту
+- **Панорамирование** — Alt + drag или средняя кнопка мыши
+- **Зум** — Ctrl + колесо мыши или кнопки +/-
+- **Выделение** — Ctrl+Click (множественное), Shift+Click (диапазон), Ctrl+A (все)
+
+### Онлайн (WebSocket)
+Все действия синхронизируются между игроками в реальном времени:
+- Перемещение объектов
+- Переворот/поворот карт
+- Создание/удаление объектов
+- Рисование
+- Чат
+
+## Структура
+
+```
+├── backend/
+│   ├── app.py          # Flask приложение
+│   ├── config.py       # Конфигурация
+│   ├── models.py       # Модели БД (User, GameSession)
+│   ├── auth.py         # API авторизации
+│   ├── game.py         # API игровых сессий
+│   ├── events.py       # SocketIO обработчики
+│   └── requirements.txt
+├── src/
+│   ├── composables/
+│   │   ├── useSocket.js        # WebSocket composable
+│   │   └── useGameBoardPan.js  # Панорамирование
+│   ├── stores/
+│   │   ├── user.js             # Авторизация
+│   │   └── game.js             # Игровое состояние
+│   ├── views/
+│   │   ├── AuthView.vue        # Страница входа
+│   │   └── GameView.vue        # Игровая страница
+│   └── components/
+│       └── gamePage/
+│           └── gameMain/
+│               ├── GameBoard.vue   # Игровое поле
+│               ├── GameObject.vue  # Объект на поле
+│               └── CardEditor.vue  # Редактор карт
+└── run-backend.bat     # Запуск бэкенда (Windows)
+```
+
+## API Endpoints
+
+### Авторизация
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/api/auth/register` | Регистрация |
+| POST | `/api/auth/login` | Вход |
+| GET | `/api/auth/me` | Текущий пользователь |
+
+### Игровые сессии
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/api/game/sessions` | Создать сессию |
+| GET | `/api/game/sessions` | Список сессий |
+| POST | `/api/game/sessions/:id/join` | Войти в сессию |
+| PUT | `/api/game/sessions/:id/state` | Сохранить состояние |
+
+См. [backend/README.md](backend/README.md) для полного описания API и WebSocket.
