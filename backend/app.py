@@ -14,28 +14,23 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
     CORS(app, supports_credentials=True)
     socketio.init_app(app, async_mode='eventlet', cors_allowed_origins="*")
 
-    # Import and register blueprints
     from auth import auth_bp
     from game import game_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(game_bp)
 
-    # Initialize SocketIO events
     from events import init_socketio
     init_socketio(socketio)
 
-    # Create database tables
     with app.app_context():
         db.create_all()
 
-    # Health check
     @app.route('/api/health')
     def health():
         return {'status': 'ok', 'message': 'OGB Game Server'}

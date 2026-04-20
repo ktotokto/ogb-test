@@ -1,11 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
-<<<<<<< HEAD
-import { X, RotateCw, Trash2, Copy, FlipVertical, Layers, Hand } from 'lucide-vue-next'
-=======
-import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2, FlipVertical, Layers } from 'lucide-vue-next'
->>>>>>> 2fa3402 (15)
+import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2, FlipVertical, Layers, Hand } from 'lucide-vue-next'
 
 const props = defineProps({
   object: { type: Object, required: true },
@@ -104,16 +100,9 @@ const handleFlip = () => {
   showContextMenu.value = false
 }
 const closeContextMenu = () => { showContextMenu.value = false }
-
-<<<<<<< HEAD
+  
 const stackCount = computed(() => {
   if (!props.object.stackId) return 0
-=======
-// Счётчик карт в стопке
-const stackCount = computed(() => {
-  if (!props.object.stackId) return 0
-  // Вычисляется в родительском компоненте
->>>>>>> 2fa3402 (15)
   return props.object._stackCount || 0
 })
 
@@ -139,10 +128,6 @@ const isTopOfStack = computed(() => {
         transition: object.faceUp === false ? 'transform 0.3s' : 'none',
         transformStyle: 'preserve-3d'
       }">
-<<<<<<< HEAD
-=======
-      <!-- Stack offset visual effect -->
->>>>>>> 2fa3402 (15)
       <template v-if="object.stackId && !isTopOfStack">
         <div class="absolute inset-0 rounded-2xl bg-slate-700/50" :style="{
           transform: `translate(${-(stackCount - stackIndex - 1) * 2}px, ${-(stackCount - stackIndex - 1) * 2}px)`
@@ -226,11 +211,6 @@ const isTopOfStack = computed(() => {
           class="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.8)]">
         </div>
       </template>
-
-<<<<<<< HEAD
-=======
-      <!-- Floating actions (всегда для карт при hover) -->
->>>>>>> 2fa3402 (15)
       <div class="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-1 glass-strong rounded-xl p-1.5 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-30">
         <button v-if="object.type === 'card'" @click.stop="handleFlip"
           class="p-2 rounded-lg hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 transition-colors"

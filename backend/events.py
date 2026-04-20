@@ -1,7 +1,8 @@
+from flask import request as flask_request
 from flask_socketio import emit, join_room, leave_room, rooms
 from flask_jwt_extended import decode_token
 from functools import wraps
-from models import db, GameSession, SessionPlayer
+from models import db, GameSession, SessionPlayer, User
 import json
 
 # SocketIO instance will be set from app.py
@@ -25,12 +26,11 @@ def get_user_from_token(token):
 
 def authenticated_only(f):
     """Decorator to require authentication for SocketIO events."""
+
     @wraps(f)
     def wrapped(*args, **kwargs):
         token = kwargs.pop('token', None)
         if not token:
-            # Try from request headers or query params
-            from flask import request as flask_request
             token = flask_request.args.get('token')
 
         user_id = get_user_from_token(token)
@@ -39,6 +39,7 @@ def authenticated_only(f):
             return
         kwargs['user_id'] = user_id
         return f(*args, **kwargs)
+
     return wrapped
 
 
@@ -47,35 +48,42 @@ def register_events():
 
     @socketio.on('connect')
     def handle_connect():
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if user_id:
             emit('connected', {'userId': user_id})
 
     @socketio.on('disconnect')
-    def handle_disconnect():
-        # Remove user from active players in rooms
-        from flask import request as flask_request
-        sid = flask_request.sid if hasattr(flask_request, 'sid') else None
-        if sid:
-            # Notify rooms that user left
-            for room_id, sids in rooms().items():
-                if room_id != sid:  # Skip personal room
-                    session = GameSession.query.get(room_id)
-                    if session:
-                        player = SessionPlayer.query.filter_by(
-                            session_id=room_id
-                        ).first()
-                        if player:
-                            user = player.user if hasattr(player, 'user') else None
-                            emit('player-offline', {
-                                'userId': player.user_id
-                            }, room=room_id, include_self=False)
+    def handle_disconnect(reason=None):  # ← FIX: добавить параметр
+        """Handle client disconnect — properly"""
+        sid = flask_request.sid
+        if not sid:
+            return
+
+        # ✅ rooms() returns list[str], not dict!
+        user_rooms = rooms(sid)  # Get rooms for this socket
+
+        for room_id in user_rooms:
+            # Skip personal room (sid == room_id)
+            if room_id == sid:
+                continue
+
+            # Notify others in this session that player left
+            session = GameSession.query.get(room_id)
+            if session:
+                player = SessionPlayer.query.filter_by(
+                    session_id=room_id,
+                    user_id=get_user_from_token(flask_request.args.get('token'))
+                ).first()
+
+                if player:
+                    emit('player-offline', {
+                        'userId': player.user_id,
+                        'username': player.user.username if player.user else 'Unknown'
+                    }, room=room_id, include_self=False)
 
     @socketio.on('join-session')
     def handle_join_session(data):
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -92,7 +100,6 @@ def register_events():
             emit('error', {'message': 'Session not found'})
             return
 
-        # Check membership
         association = SessionPlayer.query.filter_by(
             session_id=session_id, user_id=user_id
         ).first()
@@ -102,14 +109,12 @@ def register_events():
 
         join_room(session_id)
 
-        # Send current state to joining user
         emit('session-state', {
             'sessionId': session_id,
             'state': json.loads(session.state) if session.state else {},
             'players': [p.to_dict() for p in session.players]
         })
 
-        # Notify others
         user = User.query.get(user_id)
         emit('player-online', {
             'user': user.to_dict() if user else {'id': user_id}
@@ -117,7 +122,6 @@ def register_events():
 
     @socketio.on('leave-session')
     def handle_leave_session(data):
-        from flask import request as flask_request
         session_id = data.get('sessionId')
         if session_id:
             leave_room(session_id)
@@ -126,8 +130,6 @@ def register_events():
 
     @socketio.on('object-move')
     def handle_object_move(data):
-        """Broadcast object movement to all players in session."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -140,8 +142,6 @@ def register_events():
 
     @socketio.on('object-select')
     def handle_object_select(data):
-        """Broadcast object selection."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -154,8 +154,6 @@ def register_events():
 
     @socketio.on('object-flip')
     def handle_object_flip(data):
-        """Broadcast card flip."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -168,8 +166,6 @@ def register_events():
 
     @socketio.on('object-rotate')
     def handle_object_rotate(data):
-        """Broadcast object rotation."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -182,8 +178,6 @@ def register_events():
 
     @socketio.on('object-delete')
     def handle_object_delete(data):
-        """Broadcast object deletion."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -196,8 +190,6 @@ def register_events():
 
     @socketio.on('object-add')
     def handle_object_add(data):
-        """Broadcast new object addition."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -210,8 +202,6 @@ def register_events():
 
     @socketio.on('stack-add')
     def handle_stack_add(data):
-        """Broadcast stack formation."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -224,8 +214,6 @@ def register_events():
 
     @socketio.on('stack-remove')
     def handle_stack_remove(data):
-        """Broadcast stack removal."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -238,8 +226,6 @@ def register_events():
 
     @socketio.on('draw-update')
     def handle_draw_update(data):
-        """Broadcast drawing updates."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -252,8 +238,6 @@ def register_events():
 
     @socketio.on('draw-clear')
     def handle_draw_clear(data):
-        """Broadcast drawing clear."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -266,8 +250,6 @@ def register_events():
 
     @socketio.on('zoom-change')
     def handle_zoom_change(data):
-        """Broadcast zoom level (optional - clients may not need this)."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -280,8 +262,6 @@ def register_events():
 
     @socketio.on('pan-change')
     def handle_pan_change(data):
-        """Broadcast pan position (optional)."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -294,8 +274,6 @@ def register_events():
 
     @socketio.on('save-state')
     def handle_save_state(data):
-        """Save game state to database and broadcast."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -319,8 +297,6 @@ def register_events():
 
     @socketio.on('chat-message')
     def handle_chat_message(data):
-        """Broadcast chat messages."""
-        from flask import request as flask_request
         token = flask_request.args.get('token')
         user_id = get_user_from_token(token)
         if not user_id:
@@ -338,7 +314,3 @@ def register_events():
             'message': message,
             'timestamp': __import__('datetime').datetime.utcnow().isoformat()
         }, room=session_id)
-
-
-# Need User import
-from models import User
