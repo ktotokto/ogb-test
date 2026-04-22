@@ -3,7 +3,6 @@ import { ref, onUnmounted, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useGameStore } from '@/stores/game'
 
-// ✅ SINGLETON — ОДИН сокет на ВСЁ приложение
 let socketInstance = null
 let isConnectedInstance = ref(false)
 
@@ -11,12 +10,10 @@ export function useGameWebSocket() {
   const userStore = useUserStore()
   const gameStore = useGameStore()
 
-  // ✅ Создаём ТОЛЬКО ОДИН раз
   if (!socketInstance) {
     socketInstance = ref(null)
     isConnectedInstance = ref(false)
 
-    // ✅ connect определяется внутри но сохраняется в замыкании
     const connect = (token) => {
       if (socketInstance.value) socketInstance.value.disconnect()
 
@@ -28,14 +25,14 @@ export function useGameWebSocket() {
 
       socketInstance.value.on('connect', () => {
         isConnectedInstance.value = true
-        console.log('✅ Connected to WebSocket')
+        console.log('Connected to WebSocket')
         socketInstance.value.emit('friends:get_list')
         socketInstance.value.emit('friends:get_requests')
       })
 
       socketInstance.value.on('disconnect', () => {
         isConnectedInstance.value = false
-        console.log('❌ Disconnected from WebSocket')
+        console.log('Disconnected from WebSocket')
       })
 
       socketInstance.value.on('error', (data) => {
@@ -82,7 +79,6 @@ export function useGameWebSocket() {
         }
       })
 
-      // === Object Sync Events (REAL-TIME) — КРИТИЧНО! ===
       socketInstance.value.on('object:sync', (data) => {
         console.log('📥 Received object:sync:', {
           sessionId: data.sessionId,
@@ -103,18 +99,16 @@ export function useGameWebSocket() {
         }
 
         const { objectId, changes } = data.update
-        console.log('✅ Applying update:', { objectId, changes })
+        console.log('Applying update:', { objectId, changes })
         gameStore.updateObject(objectId, changes)
       })
 
-      // === Drawing Events ===
       socketInstance.value.on('drawing:created', (data) => {
         if (data.sessionId === gameStore.sessionId) {
           gameStore.addDrawing(data.drawing)
         }
       })
 
-      // === Invitation Events ===
       socketInstance.value.on('invitation:received', (data) => {
         if (confirm(`${data.sender.username} приглашает вас в игру "${data.session.name}"`)) {
           socketInstance.value.emit('invitation:accept', { invitationId: data.invitation.id })

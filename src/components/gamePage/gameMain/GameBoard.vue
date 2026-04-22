@@ -8,6 +8,7 @@ import CardEditor from './CardEditor.vue'
 import { usePlayerCursors } from '@/composables/usePlayerCursors'
 import CursorMarker from './CursorMarker.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
+import GameHand from '../GameHand.vue'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
@@ -56,6 +57,7 @@ const currentUser = computed(() => userStore.currentUser)
 
 const objects = computed(() => gameStore.objects || [])
 const drawings = computed(() => gameStore.drawings || [])
+const objectsHand = ref([])
 
 const cardDeck = ref([])
 
@@ -133,16 +135,16 @@ const startDrawing = (event) => {
     color: brushColor.value,
     size: brushSize.value
   }
-  
+
   drawings.value.push(newDrawing)
-  
+
   if (socket.value && gameStore.sessionId) {
     socket.value.emit('drawing:create', {
       sessionId: gameStore.sessionId,
       drawing: newDrawing
     })
   }
-  
+
   redrawCanvas()
 }
 
@@ -163,7 +165,7 @@ const draw = (event) => {
 const stopDrawing = () => {
   if (!isDrawing.value) return
   isDrawing.value = false
-  
+
   if (socket.value && gameStore.sessionId) {
     socket.value.emit('drawing:sync', {
       sessionId: gameStore.sessionId,
@@ -553,12 +555,12 @@ const saveCardToDeck = (updatedCard) => {
   if (idx !== -1) {
     cardDeck.value[idx] = { ...updatedCard }
   }
-  
+
   objects.value.forEach(obj => {
     if (obj.cardData && obj.cardData.id === updatedCard.id) {
       obj.cardData = { ...updatedCard }
       obj.label = updatedCard.name
-      
+
       if (socket.value && gameStore.sessionId) {
         socket.value.emit('object:sync', {
           sessionId: gameStore.sessionId,
@@ -575,7 +577,7 @@ const saveCardToDeck = (updatedCard) => {
       }
     }
   })
-  
+
   editingCard.value = null
 }
 
@@ -623,6 +625,13 @@ const endSelection = () => {
   })
   selectionStart.value = { x: 0, y: 0 }
   selectionEnd.value = { x: 0, y: 0 }
+}
+
+const addObjectToHand = (odject) => {
+  objectsHand.value.push(odject)
+  console.log("----------------------------");
+  console.log(objectsHand.value);
+  console.log("----------------------------");
 }
 
 const handleKeyDown = (event) => {
@@ -715,6 +724,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <GameHand :objects="objectsHand" />
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
 
@@ -736,7 +746,8 @@ onUnmounted(() => {
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
           @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
           @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
-          @stack-mode="enterStackMode" @stack-remove="handleStackRemove" @add-card="handleCardAdded" />
+          @stack-mode="enterStackMode" @stack-remove="handleStackRemove" @add-card="handleCardAdded"
+          @add-object-to-hand="addObjectToHand" />
 
       </div>
     </div>

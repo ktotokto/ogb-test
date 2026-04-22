@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Clock, Save, UserPlus, LogOut, Wifi, WifiOff } from 'lucide-vue-next'
+import { useGameStore } from '@/stores/game'
 import { useRouter } from 'vue-router'
+
 
 const props = defineProps({
   sessionId: String

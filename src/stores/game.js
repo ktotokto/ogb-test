@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 
 export const useGameStore = defineStore('game', () => {
-  // State
+  const gameTime = ref(null)
   const sessionId = ref(null)
   const session = ref(null)
   const players = ref([])
@@ -19,7 +19,6 @@ export const useGameStore = defineStore('game', () => {
   const isLoading = ref(false)
   const error = ref(null)
 
-  // Computed
   const isAdmin = computed(() => {
     return currentPlayer.value?.role === 'creator' || currentPlayer.value?.role === 'admin'
   })
@@ -38,9 +37,8 @@ export const useGameStore = defineStore('game', () => {
       const { useGameWebSocket } = await import('@/composables/useGameWebSocket')
       const { joinSession: wsJoinSession } = useGameWebSocket()
 
-      wsJoinSession(sessionIdValue)  // ← WebSocket emit
+      wsJoinSession(sessionIdValue)
 
-      // Ждём пока сервер отправит session:joined который обновит store
       await new Promise(resolve => setTimeout(resolve, 1000))
 
       console.log('✅ Session joined:', sessionId.value)
@@ -89,7 +87,6 @@ export const useGameStore = defineStore('game', () => {
     sessionId.value = sessionData.id
     session.value = sessionData
 
-    // ✅ Обновляем игроков
     if (sessionData.players) {
       players.value = sessionData.players
     }

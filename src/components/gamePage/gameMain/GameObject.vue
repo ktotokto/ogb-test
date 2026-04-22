@@ -23,7 +23,7 @@ const props = defineProps({
 const emit = defineEmits([
   'select', 'move', 'resize', 'delete',
   'duplicate', 'rotate', 'drag-start', 'drag-end',
-  'flip', 'stack-mode', 'stack-remove'
+  'flip', 'stack-mode', 'stack-remove', 'add-object-to-hand'
 ])
 
 const objectRef = ref(null)
@@ -49,7 +49,6 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
       live: true
     })
 
-    // ✅ Отправка синхронизации другим игрокам
     if (socket?.value && gameStore.sessionId) {
       console.log('📤 Emitting object:sync (move):', {
         sessionId: gameStore.sessionId,
@@ -155,8 +154,8 @@ const handleDelete = () => {
 }
 
 const handleAddHand = () => {
-  console.log(props.object.id)
-  console.log(props.object)
+  emit('add-object-to-hand', props.object)
+  emit('delete', props.object.id)
 }
 
 const handleDuplicate = () => {

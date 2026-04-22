@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import GamePage from '@/components/gamePage/gamePage.vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
@@ -9,14 +9,12 @@ import { Save, Share2 } from 'lucide-vue-next'
 import axios from 'axios'
 
 const route = useRoute()
-const router = useRouter()
 const sessionId = route.params.sessionId
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const showInviteModal = ref(false)
 const isLoading = ref(true)
 
-// ✅ Правильная деструктуризация из composable
 const { socket, connect, isConnected, joinSession } = useGameWebSocket()
 
 console.log('🎮 GameView mounted, sessionId:', sessionId)

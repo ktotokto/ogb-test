@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import GameHeader from './GameHeader.vue'
 import GameMain from './gameMain/GameBoard.vue'
-import GameHand from './GameHand.vue'
 import GameFooter from './GameFooter.vue'
 import PlayersList from './gameMain/PlayersList.vue'
 import GameTools from './gameMain/GameTools.vue'
@@ -49,7 +48,6 @@ const handleSetTool = (tool) => {
 
       <main class="flex-1 relative bg-slate-950 overflow-hidden">
         <GameMain ref="gameBoardRef"  oncontextmenu="return false;" />
-        <GameHand />
       </main>
     </div>
     <GameHeader :session-id="sessionId" @toggle-sidebar="sidebarOpen = !sidebarOpen" />
