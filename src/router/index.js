@@ -1,20 +1,41 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const routes = [
-  {
-    path: '/auth',
-    name: 'Auth',
-    component: () => import('@/views/AuthView.vue')
-  },
   {
     path: '/',
     name: 'Home',
     component: () => import('@/views/HomeView.vue')
   },
   {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/game/:sessionId',
     name: 'Game',
-    component: () => import('@/views/GameView.vue')
+    component: () => import('@/views/GameView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/friends',
+    name: 'Friends',
+    component: () => import('@/views/FriendsView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/games',
+    name: 'SavedGames',
+    component: () => import('@/views/FriendsView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
@@ -23,17 +44,24 @@ const router = createRouter({
   routes
 })
 
-// Навигационный guard
-router.beforeEach(async (to) => {
-  const token = localStorage.getItem('accessToken')
+// ✅ Router guard
+router.beforeEach((to, from, next) => {
+  const userStore = useUserStore()
+  const requiresAuth = to.meta.requiresAuth
 
-  // Если есть токен и идёт на /auth — редирект на главную
-  if (to.name === 'Auth' && token) {
-    return { name: 'Home' }
+  // Если страница требует авторизации
+  if (requiresAuth && !userStore.isAuthenticated) {
+    // Сохраняем куда хотел попасть пользователь
+    next({ name: 'Login', query: { redirect: to.fullPath } })
   }
-
-  // Если нет токена и идёт на GameView — можно без авторизации (для быстрого теста)
-  // В продакшене здесь будет проверка авторизации
+  // Если пользователь уже авторизован и идёт на вход — редирект на главную
+  else if (!requiresAuth && userStore.isAuthenticated && (to.name === 'Login' || to.name === 'Register')) {
+    next({ name: 'Home' })
+  }
+  // Во всех остальных случаях — разрешаем
+  else {
+    next()
+  }
 })
 
 export default router

@@ -36,7 +36,6 @@ const handleSetTool = (tool) => {
 
 <template>
   <div class="h-screen w-screen bg-slate-950 text-white flex flex-col overflow-hidden">
-    <GameHeader :session-id="sessionId" />
 
     <div class="flex-1 flex overflow-hidden">
       <aside :class="[
@@ -45,6 +44,7 @@ const handleSetTool = (tool) => {
       ]">
         <PlayersList />
         <GameTools />
+        
       </aside>
 
       <main class="flex-1 relative bg-slate-950 overflow-hidden">
@@ -52,6 +52,7 @@ const handleSetTool = (tool) => {
         <GameHand />
       </main>
     </div>
+    <GameHeader :session-id="sessionId" @toggle-sidebar="sidebarOpen = !sidebarOpen" />
 
     <GameFooter @toggle-sidebar="sidebarOpen = !sidebarOpen" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut"
       @reset-zoom="handleResetZoom" @set-tool="handleSetTool" />

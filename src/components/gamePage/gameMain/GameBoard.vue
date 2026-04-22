@@ -5,9 +5,16 @@ import { useUserStore } from '@/stores/user'
 import { useGameBoardPan } from '@/composables/useGameBoardPan'
 import GameObject from './GameObject.vue'
 import CardEditor from './CardEditor.vue'
+import { usePlayerCursors } from '@/composables/usePlayerCursors'
+import CursorMarker from './CursorMarker.vue'
+import { useGameWebSocket } from '@/composables/useGameWebSocket'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
+
+const { socket, isConnected, createObject, updateObject, deleteObject, createDrawing, emitObjectSync } = useGameWebSocket()
+const { otherCursors, sendCursorMove, sendCursorLeave } = usePlayerCursors(socket, gameStore)
+
 
 const boardRef = ref(null)
 const boardContainerRef = ref(null)
@@ -47,8 +54,8 @@ const {
 
 const currentUser = computed(() => userStore.currentUser)
 
-const objects = ref([])
-const drawings = ref([])
+const objects = computed(() => gameStore.objects || [])
+const drawings = computed(() => gameStore.drawings || [])
 
 const cardDeck = ref([])
 
@@ -119,14 +126,23 @@ const startDrawing = (event) => {
   isDrawing.value = true
   const pos = getWorldPos(event)
 
-  drawings.value.push({
+  const newDrawing = {
     id: `draw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     type: 'freehand',
     points: [{ x: pos.x, y: pos.y }],
     color: brushColor.value,
     size: brushSize.value
-  })
-
+  }
+  
+  drawings.value.push(newDrawing)
+  
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('drawing:create', {
+      sessionId: gameStore.sessionId,
+      drawing: newDrawing
+    })
+  }
+  
   redrawCanvas()
 }
 
@@ -147,6 +163,16 @@ const draw = (event) => {
 const stopDrawing = () => {
   if (!isDrawing.value) return
   isDrawing.value = false
+  
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('drawing:sync', {
+      sessionId: gameStore.sessionId,
+      drawing: {
+        type: 'complete',
+        drawings: drawings.value
+      }
+    })
+  }
 }
 
 const eraseAtWorldPos = (worldX, worldY) => {
@@ -161,6 +187,15 @@ const eraseAtWorldPos = (worldX, worldY) => {
   })
   if (drawings.value.length !== beforeCount) {
     redrawCanvas()
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('drawing:sync', {
+        sessionId: gameStore.sessionId,
+        drawing: {
+          type: 'complete',
+          drawings: drawings.value
+        }
+      })
+    }
   }
 }
 
@@ -221,7 +256,13 @@ const addCardToBoard = (card, event) => {
     stackIndex: 0,
     cardData: { ...card }
   }
-  objects.value.push(newCard)
+  gameStore.addObject(newCard)
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:create', {
+      sessionId: gameStore.sessionId,
+      object: newCard
+    })
+  }
   showCardPanel.value = false
   currentTool.value = 'select'
 }
@@ -250,6 +291,11 @@ const handleBoardMouseMove = (event) => {
     const world = getWorldPos(event)
     eraseAtWorldPos(world.x, world.y)
   }
+
+  if (isConnected.value && gameStore.sessionId && currentTool.value !== 'pan') {
+    const pos = getWorldPos(event)
+    sendCursorMove(pos.x, pos.y)
+  }
 }
 
 const handleBoardMouseUp = () => {
@@ -258,21 +304,28 @@ const handleBoardMouseUp = () => {
 }
 
 const handleObjectMove = ({ objectId, position }) => {
-  const obj = objects.value.find(o => o.id === objectId)
-  if (obj) {
-    obj.position = position
-    if (selectedObjects.value.has(objectId)) {
+  gameStore.updateObject(objectId, { position })
+
+  if (selectedObjects.value.has(objectId)) {
+    const obj = gameStore.objects.find(o => o.id === objectId)
+    if (obj) {
       const offsetX = position.x - (obj.lastPosition?.x || position.x)
       const offsetY = position.y - (obj.lastPosition?.y || position.y)
-      objects.value.forEach(o => {
-        if (selectedObjects.value.has(o.id) && o.id !== objectId) {
-          o.position.x += offsetX
-          o.position.y += offsetY
-          o.lastPosition = { ...o.position }
+
+      selectedObjects.value.forEach(id => {
+        if (id !== objectId) {
+          const otherObj = gameStore.objects.find(o => o.id === id)
+          if (otherObj) {
+            gameStore.updateObject(id, {
+              position: {
+                x: otherObj.position.x + offsetX,
+                y: otherObj.position.y + offsetY
+              }
+            })
+          }
         }
       })
     }
-    obj.lastPosition = { ...position }
   }
 }
 
@@ -283,13 +336,6 @@ const selectCardToAdd = (card) => {
 }
 
 const handleObjectSelect = (object, event) => {
-  if (stackMode.value && stackSourceId.value && object.id !== stackSourceId.value) {
-    handleStackAdd(stackSourceId.value, object.id)
-    stackMode.value = false
-    stackSourceId.value = null
-    return
-  }
-
   if (event?.ctrlKey || event?.metaKey) {
     if (selectedObjects.value.has(object.id)) {
       selectedObjects.value.delete(object.id)
@@ -298,13 +344,13 @@ const handleObjectSelect = (object, event) => {
     }
   } else if (event?.shiftKey && selectedObjects.value.size > 0) {
     const firstId = Array.from(selectedObjects.value)[0]
-    const firstIndex = objects.value.findIndex(o => o.id === firstId)
-    const currentIndex = objects.value.findIndex(o => o.id === object.id)
+    const firstIndex = gameStore.objects.findIndex(o => o.id === firstId)
+    const currentIndex = gameStore.objects.findIndex(o => o.id === object.id)
     const start = Math.min(firstIndex, currentIndex)
     const end = Math.max(firstIndex, currentIndex)
     selectedObjects.value.clear()
     for (let i = start; i <= end; i++) {
-      selectedObjects.value.add(objects.value[i].id)
+      selectedObjects.value.add(gameStore.objects[i].id)
     }
   } else {
     selectedObjects.value.clear()
@@ -314,38 +360,97 @@ const handleObjectSelect = (object, event) => {
 
 const handleObjectDelete = (objectId) => {
   if (objectId) {
-    objects.value = objects.value.filter(o => o.id !== objectId)
+    gameStore.removeObject(objectId)
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:delete', {
+        sessionId: gameStore.sessionId,
+        objectId
+      })
+    }
     selectedObjects.value.delete(objectId)
   } else {
     const idsToDelete = Array.from(selectedObjects.value)
-    objects.value = objects.value.filter(o => !selectedObjects.value.has(o.id))
+    idsToDelete.forEach(id => {
+      gameStore.removeObject(id)
+      if (socket.value && gameStore.sessionId) {
+        socket.value.emit('object:delete', {
+          sessionId: gameStore.sessionId,
+          objectId: id
+        })
+      }
+    })
     selectedObjects.value.clear()
   }
 }
 
 const handleObjectDuplicate = (object) => {
-  objects.value.push({
+  const newObject = {
     ...object,
     id: `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    position: { x: object.position.x, y: object.position.y }
-  })
+    position: { x: object.position.x + 20, y: object.position.y + 20 }
+  }
+  gameStore.addObject(newObject)
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:create', {
+      sessionId: gameStore.sessionId,
+      object: newObject
+    })
+  }
 }
 
 const handleObjectRotate = ({ objectId, rotation }) => {
   if (objectId) {
-    const obj = objects.value.find(o => o.id === objectId)
-    if (obj) obj.rotation = rotation
+    gameStore.updateObject(objectId, { rotation })
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:sync', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        update: {
+          objectId,
+          changes: { rotation },
+          type: 'rotate'
+        }
+      })
+    }
   } else {
     selectedObjects.value.forEach(id => {
-      const obj = objects.value.find(o => o.id === id)
-      if (obj) obj.rotation = (obj.rotation || 0) + 90
+      const obj = gameStore.objects.find(o => o.id === id)
+      if (obj) {
+        const newRotation = (obj.rotation || 0) + 90
+        gameStore.updateObject(id, { rotation: newRotation })
+        if (socket.value && gameStore.sessionId) {
+          socket.value.emit('object:sync', {
+            sessionId: gameStore.sessionId,
+            userId: userStore.userId,
+            update: {
+              objectId: id,
+              changes: { rotation: newRotation },
+              type: 'rotate'
+            }
+          })
+        }
+      }
     })
   }
 }
 
 const handleCardFlip = (objectId) => {
-  const obj = objects.value.find(o => o.id === objectId)
-  if (obj) obj.faceUp = !obj.faceUp
+  const obj = gameStore.objects.find(o => o.id === objectId)
+  if (obj) {
+    const newFaceUp = !obj.faceUp
+    gameStore.updateObject(objectId, { faceUp: newFaceUp })
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:sync', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        update: {
+          objectId,
+          changes: { faceUp: newFaceUp },
+          type: 'flip'
+        }
+      })
+    }
+  }
 }
 
 const enterStackMode = (objectId) => {
@@ -356,35 +461,87 @@ const enterStackMode = (objectId) => {
 }
 
 const handleStackAdd = (targetId, sourceId) => {
-  const target = objects.value.find(o => o.id === targetId)
-  const source = objects.value.find(o => o.id === sourceId)
+  const target = gameStore.objects.find(o => o.id === targetId)
+  const source = gameStore.objects.find(o => o.id === sourceId)
   if (!target || !source) return
 
   const stackId = target.stackId || target.id
-  target.stackId = stackId
-  source.stackId = stackId
+  gameStore.updateObject(targetId, { stackId })
+  gameStore.updateObject(sourceId, { stackId })
 
-  const stackCards = objects.value.filter(o => o.stackId === stackId)
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId: targetId,
+        changes: { stackId },
+        type: 'stack'
+      }
+    })
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId: sourceId,
+        changes: { stackId },
+        type: 'stack'
+      }
+    })
+  }
+
+  const stackCards = gameStore.objects.filter(o => o.stackId === stackId)
   stackCards.forEach((card, i) => {
-    card.stackIndex = i
+    gameStore.updateObject(card.id, { stackIndex: i })
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:sync', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        update: {
+          objectId: card.id,
+          changes: { stackIndex: i },
+          type: 'stack'
+        }
+      })
+    }
   })
 }
 
+
+
 const handleStackRemove = (objectId) => {
-  const obj = objects.value.find(o => o.id === objectId)
+  const obj = gameStore.objects.find(o => o.id === objectId)
   if (!obj || !obj.stackId) return
 
-  const stackCards = objects.value.filter(o => o.stackId === obj.stackId && o.id !== objectId)
-  const oldStackId = obj.stackId
+  gameStore.updateObject(objectId, { stackId: null, stackIndex: 0 })
 
-  obj.stackId = null
-  obj.stackIndex = 0
-
-  if (stackCards.length > 0) {
-    stackCards.forEach((card, i) => {
-      card.stackIndex = i
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId,
+        changes: { stackId: null, stackIndex: 0 },
+        type: 'stack'
+      }
     })
   }
+
+  const stackCards = gameStore.objects.filter(o => o.stackId === obj.stackId && o.id !== objectId)
+  stackCards.forEach((card, i) => {
+    gameStore.updateObject(card.id, { stackIndex: i })
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:sync', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        update: {
+          objectId: card.id,
+          changes: { stackIndex: i },
+          type: 'stack'
+        }
+      })
+    }
+  })
 }
 
 const openCardEditor = (card) => {
@@ -396,12 +553,29 @@ const saveCardToDeck = (updatedCard) => {
   if (idx !== -1) {
     cardDeck.value[idx] = { ...updatedCard }
   }
+  
   objects.value.forEach(obj => {
     if (obj.cardData && obj.cardData.id === updatedCard.id) {
       obj.cardData = { ...updatedCard }
       obj.label = updatedCard.name
+      
+      if (socket.value && gameStore.sessionId) {
+        socket.value.emit('object:sync', {
+          sessionId: gameStore.sessionId,
+          userId: userStore.userId,
+          update: {
+            objectId: obj.id,
+            changes: {
+              cardData: { ...updatedCard },
+              label: updatedCard.name
+            },
+            type: 'cardDataUpdate'
+          }
+        })
+      }
     }
   })
+  
   editingCard.value = null
 }
 
@@ -435,7 +609,8 @@ const endSelection = () => {
   const maxX = Math.max(selectionStart.value.x, selectionEnd.value.x)
   const minY = Math.min(selectionStart.value.y, selectionEnd.value.y)
   const maxY = Math.max(selectionStart.value.y, selectionEnd.value.y)
-  objects.value.forEach(obj => {
+
+  gameStore.objects.forEach(obj => {
     const objX = obj.position.x
     const objY = obj.position.y
     const objRight = objX + (obj.width || 100)
@@ -502,6 +677,28 @@ onMounted(() => {
   nextTick(() => {
     initDrawCanvas()
   })
+  console.log(socket.value);
+
+  if (socket.value) {
+    socket.value.on('object:sync', (data) => {
+      console.log('📥 GameBoard received object:sync:', data)
+
+      if (data.sessionId !== gameStore.sessionId) {
+        console.log('❌ Wrong session')
+        return
+      }
+
+      if (data.userId === userStore.userId) {
+        console.log('⏭️ Skipping own event')
+        return
+      }
+
+      const { objectId, changes } = data.update
+      console.log('Applying update:', { objectId, changes })
+      gameStore.updateObject(objectId, changes)
+    })
+  }
+
   window.addEventListener('mouseup', handleBoardMouseUp)
   window.addEventListener('mousemove', handleBoardMouseMove)
   window.addEventListener('keydown', handleKeyDown)
@@ -513,12 +710,16 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', handleBoardMouseMove)
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', handleResize)
+  sendCursorLeave()
 })
 </script>
 
 <template>
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
+
+    <CursorMarker v-for="(cursor, userId) in otherCursors" :key="userId" :x="cursor.x" :y="cursor.y"
+      :username="cursor.username" :color="cursor.color" :zoom="zoom" />
 
     <div ref="boardContainerRef" class="absolute inset-0 board-pan-area z-0" @click="handleBoardClick"
       @mousedown="handleBoardMouseDown">
@@ -651,13 +852,15 @@ onUnmounted(() => {
       </div>
 
       <div class="flex gap-2 mt-3">
-        <button @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
+        <button
+          @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
           class="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-sm font-medium transition-all border border-emerald-500/30">
           + Добавить карту
         </button>
       </div>
 
-      <p class="text-xs text-slate-500 mt-3 text-center">Нажмите на карту, а после на поле, чтобы добавить ее на поле</p>
+      <p class="text-xs text-slate-500 mt-3 text-center">Нажмите на карту, а после на поле, чтобы добавить ее на поле
+      </p>
     </div>
 
     <div v-if="currentTool === 'draw'"

@@ -4,3 +4,6 @@ public
 .agents
 skills-lock.json
 venv
+__pycache__/
+backend/.idea
+.idea

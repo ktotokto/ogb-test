@@ -2,6 +2,13 @@
 import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
 import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2, FlipVertical, Layers, Hand } from 'lucide-vue-next'
+import { useGameWebSocket } from '@/composables/useGameWebSocket'
+import { useGameStore } from '@/stores/game'
+import { useUserStore } from '@/stores/user'
+
+const { socket } = useGameWebSocket()
+const gameStore = useGameStore()
+const userStore = useUserStore()
 
 const props = defineProps({
   object: { type: Object, required: true },
@@ -29,17 +36,70 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
   snapToGrid: props.snapToGrid,
   gridSize: props.gridSize,
   zoom: toRef(props, 'zoom'),
+
   onDragStart: (event, pos) => {
     emit('select', props.object)
     emit('drag-start', props.object)
   },
+
   onDragMove: (event, pos) => {
-    emit('move', { objectId: props.object.id, position: { x: pos.x, y: pos.y }, live: true })
+    emit('move', {
+      objectId: props.object.id,
+      position: { x: pos.x, y: pos.y },
+      live: true
+    })
+
+    // ✅ Отправка синхронизации другим игрокам
+    if (socket?.value && gameStore.sessionId) {
+      console.log('📤 Emitting object:sync (move):', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        objectId: props.object.id,
+        position: { x: pos.x, y: pos.y }
+      })
+
+      socket.value.emit('object:sync', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        update: {
+          objectId: props.object.id,
+          changes: { position: { x: pos.x, y: pos.y } },
+          type: 'move'
+        }
+      })
+    }
   },
+
   onDragEnd: (event, pos) => {
     const finalX = props.snapToGrid ? Math.round(pos.x / props.gridSize) * props.gridSize : pos.x
     const finalY = props.snapToGrid ? Math.round(pos.y / props.gridSize) * props.gridSize : pos.y
-    emit('move', { objectId: props.object.id, position: { x: finalX, y: finalY }, final: true })
+
+    emit('move', {
+      objectId: props.object.id,
+      position: { x: finalX, y: finalY },
+      final: true
+    })
+
+    // ✅ Отправка финальной позиции
+    if (socket?.value && gameStore.sessionId) {
+      console.log('📤 Emitting object:sync (end):', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        objectId: props.object.id,
+        position: { x: finalX, y: finalY }
+      })
+
+      socket.value.emit('object:sync', {
+        sessionId: gameStore.sessionId,
+        userId: userStore.userId,
+        update: {
+          objectId: props.object.id,
+          changes: { position: { x: finalX, y: finalY } },
+          type: 'move-end'
+        }
+      })
+    }
+
     emit('drag-end', props.object)
   }
 })
@@ -63,8 +123,8 @@ const objectStyles = computed(() => ({
 }))
 
 const getObjectIcon = (type) => {
-  const icons = { card: '🎴', dice: 'Кубик', token: 'Токен', model: 'Модель', image: 'Картинка', text: 'Текст' }
-  return icons[type] || '_да_'
+  const icons = { card: '🎴', dice: '🎲', token: '🔵', model: '🎭', image: '🖼️', text: '📝' }
+  return icons[type] || '📦'
 }
 
 const handleClick = (event) => {
@@ -81,26 +141,84 @@ const handleContextMenu = (event) => {
   emit('select', props.object)
 }
 
-const handleDelete = () => { emit('delete', props.object.id); showContextMenu.value = false }
-const handleAddHand = () => {
- console.log(props.object.id);
- console.log(props.object);
- 
-  
-}
-const handleDuplicate = () => {
-  emit('duplicate', { ...props.object, id: `obj_${Date.now()}`, position: { x: props.object.position.x + 20, y: props.object.position.y + 20 } })
+const handleDelete = () => {
+  emit('delete', props.object.id)
+
+  if (socket?.value && gameStore.sessionId) {
+    socket.value.emit('object:delete', {
+      sessionId: gameStore.sessionId,
+      objectId: props.object.id
+    })
+  }
+
   showContextMenu.value = false
 }
-const handleRotate = () => {
-  emit('rotate', { objectId: props.object.id, rotation: ((props.object.rotation || 0) + 90) % 360 })
+
+const handleAddHand = () => {
+  console.log(props.object.id)
+  console.log(props.object)
 }
+
+const handleDuplicate = () => {
+  const newObject = {
+    ...props.object,
+    id: `obj_${Date.now()}`,
+    position: {
+      x: props.object.position.x + 20,
+      y: props.object.position.y + 20
+    }
+  }
+  emit('duplicate', newObject)
+
+  if (socket?.value && gameStore.sessionId) {
+    socket.value.emit('object:create', {
+      sessionId: gameStore.sessionId,
+      object: newObject
+    })
+  }
+
+  showContextMenu.value = false
+}
+
+const handleRotate = () => {
+  const newRotation = ((props.object.rotation || 0) + 90) % 360
+  emit('rotate', { objectId: props.object.id, rotation: newRotation })
+
+  if (socket?.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId: props.object.id,
+        changes: { rotation: newRotation },
+        type: 'rotate'
+      }
+    })
+  }
+}
+
 const handleFlip = () => {
   emit('flip', props.object.id)
+
+  if (socket?.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId: props.object.id,
+        changes: { faceUp: !props.object.faceUp },
+        type: 'flip'
+      }
+    })
+  }
+
   showContextMenu.value = false
 }
-const closeContextMenu = () => { showContextMenu.value = false }
-  
+
+const closeContextMenu = () => {
+  showContextMenu.value = false
+}
+
 const stackCount = computed(() => {
   if (!props.object.stackId) return 0
   return props.object._stackCount || 0
@@ -122,12 +240,12 @@ const isTopOfStack = computed(() => {
       isDragging ? 'cursor-grabbing z-50' : 'cursor-grab',
       isHovered && !isSelected && 'ring-1 ring-violet-500/50'
     ]" :style="{
-        backdropFilter: 'blur(12px)',
-        border: isSelected ? '2px solid rgba(139,92,246,0.8)' : '1px solid rgba(255,255,255,0.1)',
-        rotate: `${props.object.rotation}deg`,
-        transition: object.faceUp === false ? 'transform 0.3s' : 'none',
-        transformStyle: 'preserve-3d'
-      }">
+      backdropFilter: 'blur(12px)',
+      border: isSelected ? '2px solid rgba(139,92,246,0.8)' : '1px solid rgba(255,255,255,0.1)',
+      rotate: `${props.object.rotation}deg`,
+      transition: object.faceUp === false ? 'transform 0.3s' : 'none',
+      transformStyle: 'preserve-3d'
+    }">
       <template v-if="object.stackId && !isTopOfStack">
         <div class="absolute inset-0 rounded-2xl bg-slate-700/50" :style="{
           transform: `translate(${-(stackCount - stackIndex - 1) * 2}px, ${-(stackCount - stackIndex - 1) * 2}px)`
@@ -138,7 +256,8 @@ const isTopOfStack = computed(() => {
         class="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
       </div>
 
-      <div v-if="isSelected && !isDragging" class="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+      <div v-if="isSelected && !isDragging"
+        class="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
         <div class="px-3 py-1 rounded-full glass bg-violet-500/20 border border-violet-500/50 text-xs text-violet-300">
           {{ object.label || object.type }}
         </div>
@@ -155,8 +274,7 @@ const isTopOfStack = computed(() => {
         <!-- Card type: render with flip -->
         <template v-if="object.type === 'card'">
           <!-- Face up -->
-          <div v-if="object.faceUp !== false"
-            class="w-full h-full flex flex-col items-center justify-center p-2">
+          <div v-if="object.faceUp !== false" class="w-full h-full flex flex-col items-center justify-center p-2">
             <template v-if="object.cardData?.frontImage">
               <img :src="object.cardData.frontImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
             </template>
@@ -211,7 +329,8 @@ const isTopOfStack = computed(() => {
           class="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.8)]">
         </div>
       </template>
-      <div class="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-1 glass-strong rounded-xl p-1.5 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-30">
+      <div
+        class="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-1 glass-strong rounded-xl p-1.5 shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-30">
         <button v-if="object.type === 'card'" @click.stop="handleFlip"
           class="p-2 rounded-lg hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 transition-colors"
           :title="object.faceUp === false ? 'Повернуть лицом вверх' : 'Повернуть лицом вниз'">

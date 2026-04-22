@@ -1,327 +1,264 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useSocket } from '@/composables/useSocket'
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-
 export const useGameStore = defineStore('game', () => {
+  // State
   const sessionId = ref(null)
-  const sessionName = ref('')
+  const session = ref(null)
   const players = ref([])
+  const currentPlayer = ref(null)
   const objects = ref([])
   const drawings = ref([])
-  const cardDeck = ref([])
-  const currentPlayerId = ref(null)
   const chatMessages = ref([])
   const settings = ref({
     gridEnabled: true,
-    gridSize: 20,
-    snapToGrid: true
+    gridSize: 50,
+    snapToGrid: false
   })
-  const timer = ref(0)
+  const isLoading = ref(false)
+  const error = ref(null)
 
+  // Computed
   const isAdmin = computed(() => {
-    const player = players.value.find(p => p.id === currentPlayerId.value)
-    return player?.role === 'admin' || player?.role === 'creator'
+    return currentPlayer.value?.role === 'creator' || currentPlayer.value?.role === 'admin'
   })
-
-  const currentPlayer = computed(() => {
-    return players.value.find(p => p.id === currentPlayerId.value)
-  })
-
-  // --- API calls ---
-
-  async function createSession(name) {
-    const token = localStorage.getItem('accessToken')
-    const response = await axios.post(`${API_URL}/api/game/sessions`, { name }, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const session = response.data.session
-    sessionId.value = session.id
-    sessionName.value = session.name
-    objects.value = session.state.objects || []
-    drawings.value = session.state.drawings || []
-    cardDeck.value = session.state.cardDeck || []
-    players.value = session.players
-    return session
-  }
 
   async function joinSession(sessionIdValue) {
-    const token = localStorage.getItem('accessToken')
-    const response = await axios.post(`${API_URL}/api/game/sessions/${sessionIdValue}/join`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const session = response.data.session
-    sessionId.value = session.id
-    sessionName.value = session.name
-    objects.value = session.state.objects || []
-    drawings.value = session.state.drawings || []
-    cardDeck.value = session.state.cardDeck || []
-    players.value = session.players
-    return session
+    if (!sessionIdValue) {
+      throw new Error('Session ID is required')
+    }
+
+    isLoading.value = true
+    error.value = null
+
+    try {
+      console.log('🚪 Joining session via WebSocket:', sessionIdValue)
+
+      const { useGameWebSocket } = await import('@/composables/useGameWebSocket')
+      const { joinSession: wsJoinSession } = useGameWebSocket()
+
+      wsJoinSession(sessionIdValue)  // ← WebSocket emit
+
+      // Ждём пока сервер отправит session:joined который обновит store
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      console.log('✅ Session joined:', sessionId.value)
+
+      return session.value
+    } catch (err) {
+      console.error('❌ Failed to join session:', err)
+      error.value = 'Failed to join session'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
   }
 
-  async function fetchSession(sessionIdValue) {
-    const token = localStorage.getItem('accessToken')
-    const response = await axios.get(`${API_URL}/api/game/sessions/${sessionIdValue}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const session = response.data.session
-    sessionId.value = session.id
-    sessionName.value = session.name
-    objects.value = session.state.objects || []
-    drawings.value = session.state.drawings || []
-    cardDeck.value = session.state.cardDeck || []
-    players.value = session.players
-    return session
+  async function createSession(options = {}) {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await axios.post('/api/game/session/create', {
+        name: options.name || 'New Game',
+        isPrivate: options.isPrivate || false,
+        maxPlayers: options.maxPlayers || 8
+      })
+
+      sessionId.value = response.data.session.id
+      session.value = response.data.session
+      players.value = response.data.session.players || []
+
+      const userStore = (await import('@/stores/user')).useUserStore()
+      currentPlayer.value = players.value.find(
+        p => p.user_id === userStore.userId
+      )
+
+      return response.data.session
+    } catch (err) {
+      console.error('❌ Failed to create session:', err)
+      error.value = err.response?.data?.error || 'Failed to create session'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
   }
 
-  async function fetchSessions() {
-    const token = localStorage.getItem('accessToken')
-    const response = await axios.get(`${API_URL}/api/game/sessions`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    return response.data
-  }
+  function setSession(sessionData) {
+    sessionId.value = sessionData.id
+    session.value = sessionData
 
-  // --- Socket.IO integration ---
+    // ✅ Обновляем игроков
+    if (sessionData.players) {
+      players.value = sessionData.players
+    }
 
-  function setupSocketListeners() {
-    const socket = useSocket()
-
-    socket.on('session-state', (data) => {
-      sessionId.value = data.sessionId
-      objects.value = data.state.objects || []
-      drawings.value = data.state.drawings || []
-      cardDeck.value = data.state.cardDeck || []
-      players.value = data.players
-    })
-
-    socket.on('player-online', (data) => {
-      if (!players.value.find(p => p.id === data.user.id)) {
-        players.value.push(data.user)
+    if (sessionData.state) {
+      const state = typeof sessionData.state === 'string'
+        ? JSON.parse(sessionData.state)
+        : sessionData.state
+      objects.value = state.objects || []
+      drawings.value = state.drawings || []
+      if (state.settings) {
+        settings.value = { ...settings.value, ...state.settings }
       }
-    })
-
-    socket.on('player-offline', (data) => {
-      players.value = players.value.filter(p => p.id !== data.userId)
-    })
-
-    socket.on('object-move', (data) => {
-      const obj = objects.value.find(o => o.id === data.objectId)
-      if (obj) {
-        obj.position = data.position
-      }
-    })
-
-    socket.on('object-select', (data) => {
-      // Можно подсветить выделение другого игрока
-    })
-
-    socket.on('object-flip', (data) => {
-      const obj = objects.value.find(o => o.id === data.objectId)
-      if (obj) obj.faceUp = data.faceUp
-    })
-
-    socket.on('object-rotate', (data) => {
-      const obj = objects.value.find(o => o.id === data.objectId)
-      if (obj) obj.rotation = data.rotation
-    })
-
-    socket.on('object-delete', (data) => {
-      objects.value = objects.value.filter(o => o.id !== data.objectId)
-    })
-
-    socket.on('object-add', (data) => {
-      if (!objects.value.find(o => o.id === data.object.id)) {
-        objects.value.push(data.object)
-      }
-    })
-
-    socket.on('stack-add', (data) => {
-      const target = objects.value.find(o => o.id === data.targetId)
-      const source = objects.value.find(o => o.id === data.sourceId)
-      if (target && source) {
-        const stackId = target.stackId || target.id
-        target.stackId = stackId
-        source.stackId = stackId
-        const stackCards = objects.value.filter(o => o.stackId === stackId)
-        stackCards.forEach((card, i) => { card.stackIndex = i })
-      }
-    })
-
-    socket.on('stack-remove', (data) => {
-      const obj = objects.value.find(o => o.id === data.objectId)
-      if (obj) {
-        const stackCards = objects.value.filter(o => o.stackId === obj.stackId && o.id !== obj.id)
-        obj.stackId = null
-        obj.stackIndex = 0
-        if (stackCards.length > 0) {
-          stackCards.forEach((card, i) => { card.stackIndex = i })
-        }
-      }
-    })
-
-    socket.on('draw-update', (data) => {
-      drawings.value = data.drawings
-    })
-
-    socket.on('draw-clear', () => {
-      drawings.value = []
-    })
-
-    socket.on('chat-message', (data) => {
-      chatMessages.value.push(data)
-    })
-
-    socket.on('state-saved', (data) => {
-      console.log('[Game] State saved:', data.sessionId)
-    })
+    }
   }
 
-  function joinSocketSession(sessionIdValue) {
-    const socket = useSocket()
-    socket.joinSession(sessionIdValue)
+  function setCurrentPlayer(player) {
+    currentPlayer.value = player
+    console.log('👤 Current player set:', player)
   }
 
-  function leaveSocketSession(sessionIdValue) {
-    const socket = useSocket()
-    socket.leaveSession(sessionIdValue)
+  function addPlayer(player) {
+    const existing = players.value.find(p => p.user_id === player.user_id || p.id === player.id)
+    if (!existing) {
+      players.value.push(player)
+      console.log('👥 Player added:', player)
+    }
   }
 
-  // --- Actions ---
+  function removePlayer(playerId) {
+    const before = players.value.length
+    players.value = players.value.filter(p => p.user_id !== playerId && p.id !== playerId)
+    console.log(`👥 Player removed: ${playerId} (${before} -> ${players.value.length})`)
+
+    if (currentPlayer.value?.user_id === playerId) {
+      currentPlayer.value = null
+    }
+  }
+
+  function updatePlayer(playerId, updates) {
+    const player = players.value.find(p => p.user_id === playerId || p.id === playerId)
+    if (player) {
+      Object.assign(player, updates)
+    }
+  }
+
+  function clearSession() {
+    sessionId.value = null
+    session.value = null
+    players.value = []
+    currentPlayer.value = null
+    objects.value = []
+    drawings.value = []
+    chatMessages.value = []
+  }
 
   function addObject(obj) {
-    objects.value.push(obj)
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitObjectAdd(sessionId.value, obj)
+    const existing = objects.value.find(o => o.id === obj.id)
+    if (!existing) {
+      objects.value.push(obj)
+      console.log('🎮 Object added:', obj.id)
+
+      debouncedSave()
     }
   }
 
-  function updateObject(obj) {
-    const index = objects.value.findIndex(o => o.id === obj.id)
-    if (index !== -1) {
-      objects.value[index] = { ...objects.value[index], ...obj }
-    }
-    const socket = useSocket()
-    if (sessionId.value && obj.position) {
-      socket.emitObjectMove(sessionId.value, obj.id, obj.position)
+  function updateObject(objectId, updates) {
+    const obj = objects.value.find(o => o.id === objectId)
+    if (obj) {
+      Object.assign(obj, updates)
+      console.log('Object updated:', objectId, updates)
+
+      debouncedSave()
     }
   }
 
   function removeObject(objectId) {
+    const before = objects.value.length
     objects.value = objects.value.filter(o => o.id !== objectId)
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitObjectDelete(sessionId.value, objectId)
+    console.log(`🎮 Object removed: ${objectId} (${before} -> ${objects.value.length})`)
+
+    debouncedSave()
+  }
+
+
+  let saveTimeout = null
+  async function debouncedSave() {
+    if (saveTimeout) clearTimeout(saveTimeout)
+
+    saveTimeout = setTimeout(async () => {
+      if (!sessionId.value) return
+
+      try {
+        const state = {
+          objects: objects.value,
+          drawings: drawings.value,
+          settings: settings.value
+        }
+
+        await axios.post(`/api/game/session/${sessionId.value}/save`, { state })
+        console.log('✅ Auto-saved game state')
+      } catch (err) {
+        console.error('❌ Auto-save failed:', err)
+      }
+    }, 2000)
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+      if (sessionId.value && objects.value.length > 0) {
+        const state = {
+          objects: objects.value,
+          drawings: drawings.value,
+          settings: settings.value
+        }
+
+        navigator.sendBeacon(
+          `/api/game/session/${sessionId.value}/save`,
+          JSON.stringify({ state })
+        )
+      }
+    })
+  }
+
+
+  function addDrawing(drawing) {
+    drawings.value.push(drawing)
+  }
+
+  function addChatMessage(message) {
+    chatMessages.value.push(message)
+    if (chatMessages.value.length > 100) {
+      chatMessages.value.shift()
     }
   }
 
-  function flipObject(objectId, faceUp) {
-    const obj = objects.value.find(o => o.id === objectId)
-    if (obj) obj.faceUp = faceUp
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitObjectFlip(sessionId.value, objectId, faceUp)
-    }
-  }
-
-  function rotateObject(objectId, rotation) {
-    const obj = objects.value.find(o => o.id === objectId)
-    if (obj) obj.rotation = rotation
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitObjectRotate(sessionId.value, objectId, rotation)
-    }
-  }
-
-  function updateDrawings(newDrawings) {
-    drawings.value = newDrawings
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitDrawUpdate(sessionId.value, newDrawings)
-    }
-  }
-
-  function clearDrawings() {
-    drawings.value = []
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitDrawClear(sessionId.value)
-    }
-  }
-
-  function sendChatMessage(message) {
-    const socket = useSocket()
-    if (sessionId.value) {
-      socket.emitChatMessage(sessionId.value, message)
-    }
-  }
-
-  async function saveState() {
-    const socket = useSocket()
-    const state = {
-      objects: objects.value,
-      drawings: drawings.value,
-      cardDeck: cardDeck.value
-    }
-    if (sessionId.value) {
-      socket.emitSaveState(sessionId.value, state)
-      // Also save to DB
-      const token = localStorage.getItem('accessToken')
-      await axios.put(`${API_URL}/api/game/sessions/${sessionId.value}/state`, { state }, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-    }
-  }
-
-  function addPlayer(player) {
-    const existing = players.value.find(p => p.id === player.id)
-    if (!existing) players.value.push(player)
-  }
-
-  function reset() {
-    sessionId.value = null
-    sessionName.value = ''
-    players.value = []
-    objects.value = []
-    drawings.value = []
-    cardDeck.value = []
-    chatMessages.value = []
+  function updateSetting(key, value) {
+    settings.value[key] = value
   }
 
   return {
+    // State
     sessionId,
-    sessionName,
+    session,
     players,
+    currentPlayer,
     objects,
     drawings,
-    cardDeck,
-    currentPlayerId,
     chatMessages,
     settings,
-    timer,
+    isLoading,
+    error,
+    // Computed
     isAdmin,
-    currentPlayer,
-    createSession,
+    // Actions
+    debouncedSave,
     joinSession,
-    fetchSession,
-    fetchSessions,
-    setupSocketListeners,
-    joinSocketSession,
-    leaveSocketSession,
+    createSession,
+    setSession,
+    setCurrentPlayer,
+    addPlayer,
+    removePlayer,
+    updatePlayer,
+    clearSession,
     addObject,
     updateObject,
     removeObject,
-    flipObject,
-    rotateObject,
-    updateDrawings,
-    clearDrawings,
-    sendChatMessage,
-    saveState,
-    addPlayer,
-    reset
+    addDrawing,
+    addChatMessage,
+    updateSetting
   }
 })
