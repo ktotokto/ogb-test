@@ -10,6 +10,11 @@ import CursorMarker from './CursorMarker.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import GameHand from '../GameHand.vue'
 
+
+defineOptions({
+  inheritAttrs: false
+})
+
 const gameStore = useGameStore()
 const userStore = useUserStore()
 
@@ -242,11 +247,14 @@ const redrawCanvas = () => {
 }
 
 const addCardToBoard = (card, event) => {
+  console.log(event);
+  console.log(card);
+  
   const world = getWorldPos(event)
   const newCard = {
     id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     type: 'card',
-    label: card.name,
+    label: card.name || card.label,
     position: { x: world.x - 60, y: world.y - 90 },
     width: 120,
     height: 180,
@@ -724,7 +732,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <GameHand :objects="objectsHand" />
+  <GameHand :objects="objectsHand" @return-card="addCardToBoard" @select-card="selectCardToAdd"/>
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
 
