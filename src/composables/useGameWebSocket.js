@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client'
-import { ref, onUnmounted, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useGameStore } from '@/stores/game'
 

@@ -1,12 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { useGameStore } from '@/stores/game'
-import { useUserStore } from '@/stores/user'
-import { useGameWebSocket } from '@/composables/useGameWebSocket'
-
-const gameStore = useGameStore()
-const userStore = useUserStore()
-const { socket } = useGameWebSocket()
+import { ref } from 'vue'
 
 const isDisplay = ref(true)
 

@@ -30,6 +30,7 @@ const showGrid = ref(true)
 const gridSize = ref(50)
 const stackMode = ref(false)
 const stackSourceId = ref(null)
+const boardRotation = ref(0)
 
 const currentTool = ref('select')
 const brushColor = ref('#8b5cf6')
@@ -38,7 +39,8 @@ const isDrawing = ref(false)
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
 const selectionEnd = ref({ x: 0, y: 0 })
-const handCards = ref([]);
+const handCards = ref([])
+const isShiftPressed = ref(false)
 
 const {
   isPanning,
@@ -153,6 +155,10 @@ const startDrawing = (event) => {
   redrawCanvas()
 }
 
+const rotateBoard = (degrees) => {
+  boardRotation.value = (boardRotation.value + degrees) % 360
+}
+
 const draw = (event) => {
   if (!isDrawing.value || currentTool.value !== 'draw' || !drawCanvasRef.value) return
   event.preventDefault()
@@ -247,14 +253,12 @@ const redrawCanvas = () => {
 }
 
 const addCardToBoard = (card, event) => {
-  console.log(event);
-  console.log(card);
-  
   const world = getWorldPos(event)
+  const containerCardData = card.cardData || card
   const newCard = {
     id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     type: 'card',
-    label: card.name || card.label,
+    label: containerCardData.name,
     position: { x: world.x - 60, y: world.y - 90 },
     width: 120,
     height: 180,
@@ -264,7 +268,7 @@ const addCardToBoard = (card, event) => {
     faceUp: true,
     stackId: null,
     stackIndex: 0,
-    cardData: { ...card }
+    cardData: { ...containerCardData }
   }
   gameStore.addObject(newCard)
   if (socket.value && gameStore.sessionId) {
@@ -660,7 +664,17 @@ const handleKeyDown = (event) => {
     event.preventDefault()
     objects.value.forEach(obj => selectedObjects.value.add(obj.id))
   }
+  if (event.key === 'Shift') {
+    isShiftPressed.value = true
+  }
 }
+
+const handleKeyUp = (event) => {
+    if (event.key === 'Shift') {
+    isShiftPressed.value = false
+  }
+}
+
 
 const setTool = (tool) => {
   currentTool.value = tool
@@ -687,7 +701,8 @@ defineExpose({
   zoom,
   isPanning,
   currentTool,
-  setTool
+  setTool,
+  isShiftPressed
 })
 
 onMounted(() => {
@@ -719,6 +734,7 @@ onMounted(() => {
   window.addEventListener('mouseup', handleBoardMouseUp)
   window.addEventListener('mousemove', handleBoardMouseMove)
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
   window.addEventListener('resize', handleResize)
 })
 
@@ -726,6 +742,7 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', handleBoardMouseUp)
   window.removeEventListener('mousemove', handleBoardMouseMove)
   window.removeEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
   window.removeEventListener('resize', handleResize)
   sendCursorLeave()
 })
@@ -749,11 +766,11 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
-        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj"
+        <GameObject v-for="obj in objectsWithStackCount" class="" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
-          @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
-          @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
+          :isShiftPressed="isShiftPressed" @select="handleObjectSelect" @move="handleObjectMove" 
+          @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
           @stack-mode="enterStackMode" @stack-remove="handleStackRemove" @add-card="handleCardAdded"
           @add-object-to-hand="addObjectToHand" />
 
@@ -970,5 +987,10 @@ onUnmounted(() => {
 
 .game-object[draggable="true"]:active {
   cursor: grabbing;
+}
+
+.zoomed:hover {
+  --hover-scale: 1.5;
+  --hover-z: 1000;
 }
 </style>

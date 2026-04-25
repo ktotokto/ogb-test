@@ -17,7 +17,8 @@ const props = defineProps({
   isResizable: { type: Boolean, default: true },
   zoom: { type: Number, default: 1 },
   gridSize: { type: Number, default: 20 },
-  snapToGrid: { type: Boolean, default: false }
+  snapToGrid: { type: Boolean, default: false },
+  isShiftPressed: {type: Boolean}
 })
 
 const emit = defineEmits([
@@ -30,6 +31,7 @@ const objectRef = ref(null)
 const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const isHovered = ref(false)
+const isExpanded = computed(() => isHovered.value && props.isShiftPressed)
 
 const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
   enabled: () => props.isDraggable,
@@ -79,7 +81,6 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
       final: true
     })
 
-    // ✅ Отправка финальной позиции
     if (socket?.value && gameStore.sessionId) {
       console.log('📤 Emitting object:sync (end):', {
         sessionId: gameStore.sessionId,
@@ -118,7 +119,9 @@ watch(() => props.object.position, (newPos) => {
 const objectStyles = computed(() => ({
   width: `${props.object.width || 100}px`,
   height: `${props.object.height || 100}px`,
-  zIndex: props.object.stackId ? (props.object.stackIndex + 1) * 10 : (props.object.zIndex || 1)
+  zIndex: isExpanded.value ? 1000 : (props.object.stackId ? (props.object.stackIndex + 1) * 10 : (props.object.zIndex || 1)),
+  // transform: isExpanded.value ? 'scale(1.5)' : `rotate(${props.object.rotation}deg)`,
+  // transition: isExpanded.value ? 'transform 0.2s ease-out, z-index 0s' : 'transform 0.3s ease-in-out'
 }))
 
 const getObjectIcon = (type) => {
@@ -288,7 +291,7 @@ const isTopOfStack = computed(() => {
           </div>
           <!-- Face down (card back) -->
           <div v-else
-            class="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-700 to-cyan-700 rounded-xl">
+            class="w-full h-full flex items-center justify-center rounded-xl">
             <div v-if="object.cardData?.backImage">
               <img :src="object.cardData.backImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
             </div>
