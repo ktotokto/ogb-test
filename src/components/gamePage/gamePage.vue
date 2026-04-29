@@ -5,6 +5,7 @@ import GameMain from './gameMain/GameBoard.vue'
 import GameFooter from './GameFooter.vue'
 import PlayersList from './gameMain/PlayersList.vue'
 import GameTools from './gameMain/GameTools.vue'
+import GameEditor from './GameEditor.vue'
 
 defineProps({
   sessionId: {
@@ -39,10 +40,10 @@ const handleSetTool = (tool) => {
     <div class="flex-1 flex overflow-hidden">
       <aside :class="[
         'bg-slate-900/90 backdrop-blur border-r border-white/10 flex flex-col transition-all duration-300 overflow-y-auto',
-        sidebarOpen ? 'w-80 translate-x-0' : 'w-0 -translate-x-full overflow-hidden'
+        sidebarOpen ? 'w-95 translate-x-0' : 'w-0 -translate-x-full overflow-hidden'
       ]">
         <PlayersList />
-        <GameTools />
+        <GameEditor />
         
       </aside>
 

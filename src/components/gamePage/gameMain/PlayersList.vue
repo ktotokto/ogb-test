@@ -80,7 +80,7 @@ const getRole = (player) => {
 </script>
 
 <template>
-  <div class="w-80 p-6 border-b border-white/10">
+  <div class="w-95 p-6 border-b border-white/10">
     <h2 class="font-bold text-lg mb-5 flex items-center gap-2">
       <span class="w-1 h-6 bg-gradient-to-b from-violet-500 to-cyan-500 rounded-full"></span>
       Игроки
@@ -194,7 +194,6 @@ const getRole = (player) => {
   animation: pulse-online 2s ease-in-out infinite;
 }
 
-/* Свечение для текущего игрока */
 .ring-violet-500\/30 {
   box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
 }

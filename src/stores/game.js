@@ -18,6 +18,7 @@ export const useGameStore = defineStore('game', () => {
   })
   const isLoading = ref(false)
   const error = ref(null)
+  const decks = ref([])
 
   const isAdmin = computed(() => {
     return currentPlayer.value?.role === 'creator' || currentPlayer.value?.role === 'admin'
@@ -101,6 +102,24 @@ export const useGameStore = defineStore('game', () => {
         settings.value = { ...settings.value, ...state.settings }
       }
     }
+  }
+  function addDeck(deck) {
+    decks.value.push(deck)
+  }
+
+  function updateDeck(deckId, updates) {
+    const index = decks.value.findIndex(d => d.id === deckId)
+    if (index !== -1) {
+      decks.value[index] = { ...decks.value[index], ...updates }
+    }
+  }
+
+  function removeDeck(deckId) {
+    decks.value = decks.value.filter(d => d.id !== deckId)
+  }
+
+  function updateSetting(key, value) {
+    settings.value[key] = value
   }
 
   function setCurrentPlayer(player) {
@@ -228,7 +247,6 @@ export const useGameStore = defineStore('game', () => {
   }
 
   return {
-    // State
     sessionId,
     session,
     players,
@@ -239,9 +257,11 @@ export const useGameStore = defineStore('game', () => {
     settings,
     isLoading,
     error,
-    // Computed
     isAdmin,
-    // Actions
+    decks,
+    addDeck,
+    updateDeck,
+    removeDeck,
     debouncedSave,
     joinSession,
     createSession,
