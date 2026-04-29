@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
-import { Plus, Trash2, Save, Edit2, Copy, Search, Layers, X } from 'lucide-vue-next'
+import { Plus, Trash2, Save, Edit2, Copy, Search, Layers, X, Upload, Image as ImageIcon } from 'lucide-vue-next'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
@@ -16,6 +16,12 @@ const editingDeck = ref(null)
 const searchQuery = ref('')
 const newDeckName = ref('')
 const selectedCards = ref([])
+
+// Загрузка файлов
+const cardImages = ref([])
+const cardBackImage = ref(null)
+const isUploading = ref(false)
+const uploadedCards = ref([])
 
 const decks = computed(() => gameStore.decks || [])
 
@@ -30,10 +36,70 @@ const availableCards = computed(() => {
   return gameStore.objects.filter(obj => obj.type === 'card')
 })
 
+// Обработка загрузки картинок карт
+const handleCardImagesUpload = (event) => {
+  const files = Array.from(event.target.files)
+  if (files.length === 0) return
+
+  isUploading.value = true
+  uploadedCards.value = []
+
+  files.forEach((file, index) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      uploadedCards.value.push({
+        id: `temp_${Date.now()}_${index}`,
+        file: file,
+        image: e.target.result,
+        name: file.name.replace(/\.[^/.]+$/, ""),
+        label: `Карта ${index + 1}`
+      })
+
+      // Когда все файлы загружены
+      if (uploadedCards.value.length === files.length) {
+        isUploading.value = false
+      }
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// Обработка загрузки рубашки
+const handleCardBackUpload = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    cardBackImage.value = {
+      file: file,
+      image: e.target.result
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+// Удалить карту из загруженных
+const removeUploadedCard = (index) => {
+  uploadedCards.value.splice(index, 1)
+}
+
+// Переместить карту
+const moveUploadedCard = (index, direction) => {
+  const newIndex = index + direction
+  if (newIndex < 0 || newIndex >= uploadedCards.value.length) return
+  const temp = uploadedCards.value[index]
+  uploadedCards.value[index] = uploadedCards.value[newIndex]
+  uploadedCards.value[newIndex] = temp
+}
+
 const startCreateDeck = () => {
   editingDeck.value = null
   newDeckName.value = ''
   selectedCards.value = []
+  cardImages.value = []
+  cardBackImage.value = null
+  uploadedCards.value = []
   isCreating.value = true
 }
 
@@ -42,6 +108,121 @@ const startEditDeck = (deck) => {
   newDeckName.value = deck.name
   selectedCards.value = deck.cards || []
   isCreating.value = true
+}
+
+// Создать колоду из загруженных картинок
+const createDeckFromImages = async () => {
+  if (!newDeckName.value.trim()) {
+    alert('Введите название колоды!')
+    return
+  }
+
+  if (uploadedCards.value.length === 0) {
+    alert('Загрузите хотя бы одну карту!')
+    return
+  }
+
+  isUploading.value = true
+
+  try {
+    const deckCards = []
+    const centerX = 50000
+    const centerY = 50000
+    const cardsPerRow = 5
+    const cardWidth = 140
+    const cardHeight = 200
+
+    // Создаем карты из загруженных изображений
+    for (let i = 0; i < uploadedCards.value.length; i++) {
+      const uploadedCard = uploadedCards.value[i]
+      const row = Math.floor(i / cardsPerRow)
+      const col = i % cardsPerRow
+
+      const newCard = {
+        id: `card_${Date.now()}_${i}`,
+        type: 'card',
+        label: uploadedCard.label || `Карта ${i + 1}`,
+        position: {
+          x: centerX + (col * cardWidth) - ((uploadedCards.value.length > cardsPerRow ? cardsPerRow : uploadedCards.value.length) * cardWidth / 2) + 60,
+          y: centerY + (row * cardHeight) - 200
+        },
+        width: 120,
+        height: 180,
+        rotation: 0,
+        owner: userStore.userId,
+        ownerId: userStore.userId,
+        inHand: false,
+        faceUp: true,
+        stackId: null,
+        stackIndex: 0,
+        cardData: {
+          name: uploadedCard.label || `Карта ${i + 1}`,
+          frontImage: uploadedCard.image,
+          backImage: cardBackImage.value?.image || null
+        }
+      }
+
+      // Добавляем карту в store
+      gameStore.addObject(newCard)
+
+      // Отправляем через WebSocket
+      if (socket.value && gameStore.sessionId) {
+        await socket.value.emit('object:create', {
+          sessionId: gameStore.sessionId,
+          object: newCard
+        })
+      }
+
+      // Добавляем в колоду
+      deckCards.push({
+        id: newCard.id,
+        label: newCard.label,
+        cardData: newCard.cardData
+      })
+
+      // Небольшая задержка чтобы не перегружать
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+
+    // Создаем колоду
+    const deckData = {
+      id: `deck_${Date.now()}`,
+      name: newDeckName.value,
+      cards: deckCards,
+      cardCount: deckCards.length,
+      hasCustomBack: !!cardBackImage.value,
+      createdAt: new Date().toISOString(),
+      createdBy: userStore.userId
+    }
+
+    gameStore.addDeck(deckData)
+
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('deck:create', {
+        sessionId: gameStore.sessionId,
+        deck: deckData
+      })
+    }
+
+    // Очищаем
+    uploadedCards.value = []
+    cardBackImage.value = null
+    newDeckName.value = ''
+    isCreating.value = false
+
+    alert(`Создано ${deckCards.length} карт и колода "${deckData.name}"!`)
+
+  } catch (error) {
+    console.error('Ошибка создания колоды:', error)
+    alert('Ошибка при создании колоды: ' + error.message)
+  } finally {
+    isUploading.value = false
+  }
+}
+
+const selectDeckToAdd = (deck) => {
+  // Передаём в GameBoard через emit или store
+  emit('select-deck', deck)
 }
 
 const saveDeck = () => {
@@ -79,6 +260,8 @@ const cancelEdit = () => {
   editingDeck.value = null
   newDeckName.value = ''
   selectedCards.value = []
+  uploadedCards.value = []
+  cardBackImage.value = null
 }
 
 const deleteDeck = (deckId) => {
@@ -126,10 +309,10 @@ const removeCardFromDeck = (cardId) => {
 
 const spawnDeck = (deck) => {
   if (!confirm(`Создать ${deck.cards?.length || 0} карт на поле?`)) return
-  
+
   const centerX = 50000
   const centerY = 50000
-  
+
   deck.cards?.forEach((card, index) => {
     const newCard = {
       id: `card_${Date.now()}_${index}`,
@@ -148,9 +331,9 @@ const spawnDeck = (deck) => {
       faceUp: true,
       cardData: card.cardData
     }
-    
+
     gameStore.addObject(newCard)
-    
+
     if (socket.value && gameStore.sessionId) {
       socket.value.emit('object:create', {
         sessionId: gameStore.sessionId,
@@ -165,18 +348,12 @@ const spawnDeck = (deck) => {
   <div v-if="!isCreating" class="space-y-4">
     <div class="flex items-center gap-2">
       <div class="relative flex-1">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Поиск колод..."
-          class="w-full px-4 py-2 pl-10 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
-        />
+        <input v-model="searchQuery" type="text" placeholder="Поиск колод..."
+          class="w-full px-4 py-2 pl-10 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500" />
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
       </div>
-      <button
-        @click="startCreateDeck"
-        class="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-all flex items-center gap-1 text-sm"
-      >
+      <button @click="startCreateDeck"
+        class="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-all flex items-center gap-1 text-sm">
         <Plus class="w-4 h-4" />
         Создать
       </button>
@@ -189,39 +366,28 @@ const spawnDeck = (deck) => {
     </div>
 
     <div v-else class="space-y-2">
-      <div
-        v-for="deck in filteredDecks"
-        :key="deck.id"
-        class="p-3 bg-slate-800/40 border border-white/5 rounded-lg hover:border-violet-500/30 transition-all"
-      >
+      <div v-for="deck in filteredDecks" :key="deck.id"
+        class="p-3 bg-slate-800/40 border border-white/5 rounded-lg hover:border-violet-500/30 transition-all">
         <div class="flex items-center justify-between mb-2">
           <h3 class="font-medium text-white">{{ deck.name }}</h3>
           <span class="text-xs text-slate-400">{{ deck.cards?.length || 0 }} карт</span>
         </div>
         <div class="flex items-center gap-1">
-          <button
-            @click="startEditDeck(deck)"
-            class="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded text-xs transition-all flex items-center justify-center gap-1"
-          >
+          <button @click="startEditDeck(deck)"
+            class="flex-1 px-2 py-1.5 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded text-xs transition-all flex items-center justify-center gap-1">
             <Edit2 class="w-3 h-3" />
             Редактировать
           </button>
-          <button
-            @click="duplicateDeck(deck)"
-            class="px-2 py-1.5 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded text-xs transition-all"
-          >
+          <button @click="duplicateDeck(deck)"
+            class="px-2 py-1.5 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded text-xs transition-all">
             <Copy class="w-3 h-3" />
           </button>
-          <button
-            @click="spawnDeck(deck)"
-            class="px-2 py-1.5 bg-emerald-600/50 hover:bg-emerald-500 text-white rounded text-xs transition-all"
-          >
+          <button @click="spawnDeck(deck)"
+            class="px-2 py-1.5 bg-emerald-600/50 hover:bg-emerald-500 text-white rounded text-xs transition-all">
             <Plus class="w-3 h-3" />
           </button>
-          <button
-            @click="deleteDeck(deck.id)"
-            class="px-2 py-1.5 bg-red-600/50 hover:bg-red-500 text-white rounded text-xs transition-all"
-          >
+          <button @click="deleteDeck(deck.id)"
+            class="px-2 py-1.5 bg-red-600/50 hover:bg-red-500 text-white rounded text-xs transition-all">
             <Trash2 class="w-3 h-3" />
           </button>
         </div>
@@ -239,12 +405,89 @@ const spawnDeck = (deck) => {
       </button>
     </div>
 
-    <input
-      v-model="newDeckName"
-      type="text"
-      placeholder="Название колоды"
-      class="w-full px-4 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
-    />
+    <!-- Режим создания из изображений -->
+    <div class="space-y-4 p-4 bg-slate-800/30 border border-violet-500/30 rounded-lg">
+      <h4 class="text-sm font-medium text-violet-300 flex items-center gap-2">
+        <Upload class="w-4 h-4" />
+        Создать колоду из изображений
+      </h4>
+
+      <input v-model="newDeckName" type="text" placeholder="Название колоды *"
+        class="w-full px-4 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500" />
+
+      <!-- Загрузка рубашки -->
+      <div class="space-y-2">
+        <label class="text-xs text-slate-400">Рубашка карт (необязательно)</label>
+        <div v-if="cardBackImage" class="relative w-full h-24 bg-slate-700/50 rounded-lg overflow-hidden">
+          <img :src="cardBackImage.image" class="w-full h-full object-cover" />
+          <button @click="cardBackImage = null"
+            class="absolute top-1 right-1 p-1 bg-red-600/80 hover:bg-red-500 rounded text-white">
+            <X class="w-3 h-3" />
+          </button>
+        </div>
+        <label v-else
+          class="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 hover:border-violet-500 rounded-lg cursor-pointer transition-all">
+          <div class="text-center">
+            <ImageIcon class="w-6 h-6 mx-auto text-slate-400 mb-1" />
+            <span class="text-xs text-slate-400">Загрузить рубашку</span>
+          </div>
+          <input type="file" @change="handleCardBackUpload" accept="image/*" class="hidden" />
+        </label>
+      </div>
+
+      <!-- Загрузка карт -->
+      <div class="space-y-2">
+        <label class="text-xs text-slate-400">Карты (выберите несколько файлов) *</label>
+        <label
+          class="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 hover:border-violet-500 rounded-lg cursor-pointer transition-all">
+          <div class="text-center">
+            <Upload class="w-6 h-6 mx-auto text-slate-400 mb-1" />
+            <span class="text-xs text-slate-400">Выберите изображения карт</span>
+          </div>
+          <input type="file" @change="handleCardImagesUpload" accept="image/*" multiple class="hidden" />
+        </label>
+      </div>
+
+      <!-- Предпросмотр загруженных карт -->
+      <div v-if="uploadedCards.length > 0" class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-400">Загружено карт: {{ uploadedCards.length }}</span>
+          <button @click="uploadedCards = []" class="text-xs text-red-400 hover:text-red-300">
+            Очистить все
+          </button>
+        </div>
+        <div class="max-h-48 overflow-y-auto space-y-2 p-2 bg-slate-800/40 rounded">
+          <div v-for="(card, index) in uploadedCards" :key="card.id"
+            class="flex items-center gap-2 p-2 bg-slate-700/30 rounded">
+            <img :src="card.image" class="w-10 h-14 object-cover rounded" />
+            <div class="flex-1 min-w-0">
+              <input v-model="card.label" type="text" placeholder="Название карты"
+                class="w-full px-2 py-1 bg-slate-600/50 border border-white/10 rounded text-xs text-white placeholder-slate-400" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <button @click="moveUploadedCard(index, -1)" class="p-1 hover:bg-slate-600 rounded text-xs">↑</button>
+              <button @click="moveUploadedCard(index, 1)" class="p-1 hover:bg-slate-600 rounded text-xs">↓</button>
+            </div>
+            <button @click="removeUploadedCard(index)" class="p-1 text-red-400 hover:bg-red-500/20 rounded">
+              <X class="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button @click="createDeckFromImages" :disabled="!newDeckName.trim() || uploadedCards.length === 0 || isUploading"
+        class="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center gap-2">
+        <Upload v-if="!isUploading" class="w-4 h-4" />
+        <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        {{ isUploading ? 'Создание...' : `Создать ${uploadedCards.length} карт и колоду` }}
+      </button>
+    </div>
+
+    <div class="border-t border-white/10 pt-4">
+      <p class="text-xs text-slate-500 text-center">
+        Или используйте старый способ редактирования
+      </p>
+    </div>
 
     <div class="border border-white/10 rounded-lg overflow-hidden">
       <div class="p-2 bg-slate-800/60 border-b border-white/10 flex items-center justify-between">
@@ -254,11 +497,8 @@ const spawnDeck = (deck) => {
         <div v-if="selectedCards.length === 0" class="text-center py-4 text-slate-400 text-xs">
           Нет карт в колоде
         </div>
-        <div
-          v-for="card in selectedCards"
-          :key="card.id"
-          class="flex items-center justify-between p-2 bg-slate-700/30 rounded text-xs"
-        >
+        <div v-for="card in selectedCards" :key="card.id"
+          class="flex items-center justify-between p-2 bg-slate-700/30 rounded text-xs">
           <span class="text-slate-300 truncate flex-1">{{ card.label }}</span>
           <button @click="removeCardFromDeck(card.id)" class="text-red-400 hover:text-red-300 ml-2">
             <X class="w-3 h-3" />
@@ -272,17 +512,12 @@ const spawnDeck = (deck) => {
         <span class="text-xs font-medium text-slate-300">Доступные карты</span>
       </div>
       <div class="max-h-40 overflow-y-auto p-2 grid grid-cols-2 gap-2">
-        <div
-          v-for="card in availableCards"
-          :key="card.id"
-          @click="toggleCardSelection(card)"
-          :class="[
-            'p-2 rounded cursor-pointer transition-all text-xs',
-            selectedCards.find(c => c.id === card.id)
-              ? 'bg-violet-600/50 border-violet-500 text-white'
-              : 'bg-slate-700/30 border-white/5 hover:bg-slate-600/50 text-slate-300'
-          ]"
-        >
+        <div v-for="card in availableCards" :key="card.id" @click="toggleCardSelection(card)" :class="[
+          'p-2 rounded cursor-pointer transition-all text-xs',
+          selectedCards.find(c => c.id === card.id)
+            ? 'bg-violet-600/50 border-violet-500 text-white'
+            : 'bg-slate-700/30 border-white/5 hover:bg-slate-600/50 text-slate-300'
+        ]">
           {{ card.label }}
         </div>
         <div v-if="availableCards.length === 0" class="col-span-2 text-center py-4 text-slate-400 text-xs">
@@ -292,18 +527,19 @@ const spawnDeck = (deck) => {
     </div>
 
     <div class="flex gap-2">
-      <button
-        @click="saveDeck"
-        :disabled="!newDeckName.trim()"
-        class="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm"
-      >
+
+      <button @click="selectDeckToAdd(deck)"
+        class="px-2 py-1.5 bg-violet-600/50 hover:bg-violet-500 text-white rounded text-xs transition-all"
+        title="Создать на поле">
+        <Layers class="w-3 h-3" />
+      </button>
+      <button @click="saveDeck" :disabled="!newDeckName.trim()"
+        class="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm">
         <Save class="w-4 h-4" />
         Сохранить
       </button>
-      <button
-        @click="cancelEdit"
-        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all text-sm"
-      >
+      <button @click="cancelEdit"
+        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all text-sm">
         Отмена
       </button>
     </div>

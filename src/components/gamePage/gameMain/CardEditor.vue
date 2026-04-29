@@ -62,23 +62,7 @@ const handleClose = () => {
               class="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
               placeholder="Введите название..." />
           </div>
-
-          <!-- Card Type -->
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Тип карты</label>
-            <select v-model="editedCard.type"
-              class="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-white/10 text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all">
-              <option value="attack">⚔️ Attack</option>
-              <option value="defense">🛡️ Defense</option>
-              <option value="magic">✨ Magic</option>
-              <option value="heal">💚 Heal</option>
-              <option value="custom">🎴 Custom</option>
-            </select>
-          </div>
-
-          <!-- Images Section -->
           <div class="grid grid-cols-2 gap-4">
-            <!-- Front Image -->
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-2">Лицевая сторона</label>
               <div

@@ -776,20 +776,7 @@ onUnmounted(() => {
 
       </div>
     </div>
-    <div
-      class="absolute top-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-800/60 backdrop-blur border border-violet-500/30 text-sm text-violet-300 toolbar z-50">
-      <template v-if="stackMode">
-        Режим стопки — кликните на другую карту, чтобы добавить в стопку (Esc — отмена)
 
-      </template>
-      <template v-else>
-        {{ currentTool === 'select' && `Select Tool — ${selectedObjects.size} selected — Ctrl+Click to multi-select` }}
-        {{ currentTool === 'pan' && 'Pan Tool - Hold Alt + Drag' }}
-        {{ currentTool === 'draw' && 'Draw Tool - Click and Drag' }}
-        {{ currentTool === 'erase' && 'Erase Tool - Click and Drag' }}
-        {{ currentTool === 'addCard' && 'Add Card Tool - Click on Board' }}
-      </template>
-    </div>
 
     <div class="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 toolbar z-50">
       <button @click="setTool('select')" :class="[
