@@ -26,15 +26,9 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/friends',
-    name: 'Friends',
-    component: () => import('@/views/FriendsView.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/games',
     name: 'SavedGames',
-    component: () => import('@/views/FriendsView.vue'),
+    component: () => import('@/views/GameListView.vue'),
     meta: { requiresAuth: true }
   }
 ]

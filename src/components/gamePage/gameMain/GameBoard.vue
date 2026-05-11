@@ -9,6 +9,8 @@ import { usePlayerCursors } from '@/composables/usePlayerCursors'
 import CursorMarker from './CursorMarker.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import GameHand from '../GameHand.vue'
+import { Layers } from 'lucide-vue-next'
+
 
 
 defineOptions({
@@ -188,6 +190,17 @@ const stopDrawing = () => {
   }
 }
 
+const checkDeckOverlap = (pos, excludeId) => {
+  for (const obj of objects.value) {
+    if (obj.id === excludeId || obj.type !== 'deck') continue
+    const dx = Math.abs(obj.position.x - pos.x)
+    const dy = Math.abs(obj.position.y - pos.y)
+    if (dx < 100 && dy < 100) return obj
+  }
+  return null
+}
+
+
 const eraseAtWorldPos = (worldX, worldY) => {
   if (currentTool.value !== 'erase') return
   const eraseRadius = (brushSize.value * 5) / zoom.value
@@ -293,6 +306,9 @@ const handleBoardMouseDown = (event) => {
     eraseAtWorldPos(world.x, world.y)
   } else if (currentTool.value === 'addCard' && selectedCard.value) {
     addCardToBoard(selectedCard.value, event)
+  } else if (currentTool.value === 'addDeck') {
+    createDeckOnBoard(event)
+    currentTool.value = 'select'
   }
 }
 
@@ -317,29 +333,134 @@ const handleBoardMouseUp = () => {
   endSelection()
 }
 
-const handleObjectMove = ({ objectId, position }) => {
+const handleObjectMove = ({ objectId, position, final }) => {
+  const obj = gameStore.objects.find(o => o.id === objectId)
+  if (!obj) return
+
+  const lastPosition = { ...obj.position }
   gameStore.updateObject(objectId, { position })
 
-  if (selectedObjects.value.has(objectId)) {
-    const obj = gameStore.objects.find(o => o.id === objectId)
-    if (obj) {
-      const offsetX = position.x - (obj.lastPosition?.x || position.x)
-      const offsetY = position.y - (obj.lastPosition?.y || position.y)
+  if (final && obj.type === 'card') {
+    const overlappedDeck = checkDeckOverlap(position, objectId)
+    if (overlappedDeck) {
+      console.log(overlappedDeck);
+      
+      gameStore.addCardToDeck(overlappedDeck.id, obj)
+      gameStore.removeObject(objectId)
 
-      selectedObjects.value.forEach(id => {
-        if (id !== objectId) {
-          const otherObj = gameStore.objects.find(o => o.id === id)
-          if (otherObj) {
-            gameStore.updateObject(id, {
-              position: {
-                x: otherObj.position.x + offsetX,
-                y: otherObj.position.y + offsetY
-              }
-            })
-          }
+      if (socket.value && gameStore.sessionId) {
+        socket.value.emit('deck:addCard', {
+          sessionId: gameStore.sessionId,
+          deckId: overlappedDeck.id,
+          card: { id: obj.id, label: obj.label, cardData: obj.cardData }
+        })
+      }
+      return
+    }
+  }
+
+  if (selectedObjects.value.has(objectId)) {
+    const offsetX = position.x - (lastPosition.x || position.x)
+    const offsetY = position.y - (lastPosition.y || position.y)
+
+    selectedObjects.value.forEach(id => {
+      if (id !== objectId) {
+        const otherObj = gameStore.objects.find(o => o.id === id)
+        if (otherObj) {
+          gameStore.updateObject(id, {
+            position: { x: otherObj.position.x + offsetX, y: otherObj.position.y + offsetY }
+          })
         }
+      }
+    })
+  }
+
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: { objectId, changes: { position }, type: 'move' }
+    })
+  }
+}
+
+const handleAddToHand = (objectId) => {
+  const obj = gameStore.objects.find(o => o.id === objectId)
+  objectsHand.value.push(obj)
+
+  gameStore.updateObject(objectId, {
+    inHand: true,
+    owner: userStore.userId
+  })
+
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId,
+        changes: { inHand: true, owner: userStore.userId },
+        type: 'hand-add'
+      }
+    })
+  }
+  handleObjectDelete(objectId)
+}
+
+const handleDrawFromDeck = (deckId, position) => {
+  const drawnCards = gameStore.drawFromDeck(deckId, 1, position)
+  drawnCards.forEach(card => {
+    gameStore.addObject(card)
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:create', {
+        sessionId: gameStore.sessionId,
+        object: card
       })
     }
+  })
+}
+
+const handleShuffleDeck = (deckId) => {
+  gameStore.shuffleDeck(deckId)
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('deck:shuffle', {
+      sessionId: gameStore.sessionId,
+      deckId
+    })
+  }
+}
+
+const handleSpreadDeck = (deckId, position) => {
+  const spreadCards = gameStore.spreadDeck(deckId, position)
+  spreadCards.forEach(card => {
+    gameStore.addObject(card)
+    if (socket.value && gameStore.sessionId) {
+      socket.value.emit('object:create', {
+        sessionId: gameStore.sessionId,
+        object: card
+      })
+    }
+  })
+}
+
+const createDeckOnBoard = (event) => {
+  const world = getWorldPos(event)
+  const deck = {
+    id: `deck_${Date.now()}`,
+    type: 'deck',
+    label: 'Колода',
+    position: { x: world.x - 60, y: world.y - 90 },
+    width: 120,
+    height: 180,
+    rotation: 0,
+    owner: userStore.userId,
+    ownerId: userStore.userId,
+    cards: [],
+    cardCount: 0
+  }
+  gameStore.addDeck({ id: deck.id, name: deck.label, cards: [], cardCount: 0}, { x: world.x - 60, y: world.y - 90 })
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('deck:create', { sessionId: gameStore.sessionId, deck })
   }
 }
 
@@ -522,7 +643,6 @@ const handleStackAdd = (targetId, sourceId) => {
 }
 
 
-
 const handleStackRemove = (objectId) => {
   const obj = gameStore.objects.find(o => o.id === objectId)
   if (!obj || !obj.stackId) return
@@ -639,13 +759,6 @@ const endSelection = () => {
   selectionEnd.value = { x: 0, y: 0 }
 }
 
-const addObjectToHand = (odject) => {
-  objectsHand.value.push(odject)
-  console.log("----------------------------");
-  console.log(objectsHand.value);
-  console.log("----------------------------");
-}
-
 const handleKeyDown = (event) => {
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return
   if (event.key === 'Escape') {
@@ -670,7 +783,7 @@ const handleKeyDown = (event) => {
 }
 
 const handleKeyUp = (event) => {
-    if (event.key === 'Shift') {
+  if (event.key === 'Shift') {
     isShiftPressed.value = false
   }
 }
@@ -682,10 +795,6 @@ const setTool = (tool) => {
     selectedCard.value = null
   }
 }
-
-const handleCardAdded = (card) => {
-  handCards.value.push(card);
-};
 
 const handleResize = () => {
   initDrawCanvas()
@@ -709,25 +818,43 @@ onMounted(() => {
   nextTick(() => {
     initDrawCanvas()
   })
-  console.log(socket.value);
 
   if (socket.value) {
     socket.value.on('object:sync', (data) => {
-      console.log('📥 GameBoard received object:sync:', data)
-
       if (data.sessionId !== gameStore.sessionId) {
-        console.log('❌ Wrong session')
         return
       }
 
       if (data.userId === userStore.userId) {
-        console.log('⏭️ Skipping own event')
         return
       }
 
       const { objectId, changes } = data.update
-      console.log('Applying update:', { objectId, changes })
       gameStore.updateObject(objectId, changes)
+    })
+    socket.value?.on('deck:create', (data) => {
+      if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
+      gameStore.addDeck(data.deck, data.deck.position)
+    })
+
+    socket.value?.on('deck:update', (data) => {
+      if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
+      gameStore.updateDeck(data.deck.id, data.deck)
+    })
+
+    socket.value?.on('deck:addCard', (data) => {
+      if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
+      gameStore.addCardToDeck(data.deckId, data.card)
+    })
+
+    socket.value?.on('deck:shuffle', (data) => {
+      if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
+      gameStore.shuffleDeck(data.deckId)
+    })
+
+    socket.value?.on('deck:draw', (data) => {
+      if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
+      data.cards?.forEach(c => gameStore.addObject(c))
     })
   }
 
@@ -749,7 +876,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <GameHand :objects="objectsHand" @return-card="addCardToBoard" @select-card="selectCardToAdd"/>
+  <GameHand :objects="objectsHand" :isShiftPressed="isShiftPressed" @return-card="addCardToBoard" @select-card="selectCardToAdd" />
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
 
@@ -766,13 +893,13 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
-        <GameObject v-for="obj in objectsWithStackCount" class="" :key="obj.id" :object="obj"
+        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
-          :isShiftPressed="isShiftPressed" @select="handleObjectSelect" @move="handleObjectMove" 
-          @delete="handleObjectDelete" @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
-          @stack-mode="enterStackMode" @stack-remove="handleStackRemove" @add-card="handleCardAdded"
-          @add-object-to-hand="addObjectToHand" />
+          :is-shift-pressed="isShiftPressed" :board-rotation="boardRotation" @select="handleObjectSelect"
+          @move="handleObjectMove" @delete="handleObjectDelete" @duplicate="handleObjectDuplicate"
+          @rotate="handleObjectRotate" @flip="handleCardFlip" @draw-from-deck="handleDrawFromDeck"
+          @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck" @add-to-hand="handleAddToHand" />
 
       </div>
     </div>
@@ -825,6 +952,13 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
+      </button>
+
+      <button @click="setTool('addDeck')" :class="[
+        'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg border border-white/10',
+        currentTool === 'addDeck' ? 'bg-violet-600 text-white' : 'bg-slate-800/60 hover:bg-slate-700 text-white',
+      ]" title="Создать колоду">
+        <Layers class="w-5 h-5" />
       </button>
 
       <button @click="showCardPanel = !showCardPanel" :class="[

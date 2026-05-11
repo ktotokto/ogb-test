@@ -4,7 +4,6 @@ import GameHeader from './GameHeader.vue'
 import GameMain from './gameMain/GameBoard.vue'
 import GameFooter from './GameFooter.vue'
 import PlayersList from './gameMain/PlayersList.vue'
-import GameTools from './gameMain/GameTools.vue'
 import GameEditor from './GameEditor.vue'
 
 defineProps({
@@ -52,7 +51,6 @@ const handleSetTool = (tool) => {
       </main>
     </div>
     <GameHeader :session-id="sessionId" @toggle-sidebar="sidebarOpen = !sidebarOpen" />
-
     <GameFooter @toggle-sidebar="sidebarOpen = !sidebarOpen" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut"
       @reset-zoom="handleResetZoom" @set-tool="handleSetTool" />
   </div>

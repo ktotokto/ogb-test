@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
-import { X, RotateCw, Trash2, Copy, GripVertical, Maximize2, FlipVertical, Layers, Hand } from 'lucide-vue-next'
+import { RotateCw, Trash2, Copy, FlipVertical, Layers, Hand, Plus, Shuffle, LayoutGrid } from 'lucide-vue-next'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
@@ -18,13 +18,15 @@ const props = defineProps({
   zoom: { type: Number, default: 1 },
   gridSize: { type: Number, default: 20 },
   snapToGrid: { type: Boolean, default: false },
-  isShiftPressed: {type: Boolean}
+  isShiftPressed: { type: Boolean },
+  boardRotation: { type: Number, default: 0 }
 })
 
 const emit = defineEmits([
   'select', 'move', 'resize', 'delete',
   'duplicate', 'rotate', 'drag-start', 'drag-end',
-  'flip', 'stack-mode', 'stack-remove', 'add-object-to-hand'
+  'flip', 'stack-mode', 'stack-remove', 'add-object-to-hand',
+  'draw-from-deck', 'shuffle-deck', 'spread-deck'
 ])
 
 const objectRef = ref(null)
@@ -32,6 +34,8 @@ const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const isHovered = ref(false)
 const isExpanded = computed(() => isHovered.value && props.isShiftPressed)
+const isDeck = computed(() => props.object.type === 'deck')
+const deckCardCount = computed(() => props.object.cardCount || props.object.cards?.length || 0)
 
 const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
   enabled: () => props.isDraggable,
@@ -52,13 +56,6 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
     })
 
     if (socket?.value && gameStore.sessionId) {
-      console.log('📤 Emitting object:sync (move):', {
-        sessionId: gameStore.sessionId,
-        userId: userStore.userId,
-        objectId: props.object.id,
-        position: { x: pos.x, y: pos.y }
-      })
-
       socket.value.emit('object:sync', {
         sessionId: gameStore.sessionId,
         userId: userStore.userId,
@@ -82,13 +79,6 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
     })
 
     if (socket?.value && gameStore.sessionId) {
-      console.log('📤 Emitting object:sync (end):', {
-        sessionId: gameStore.sessionId,
-        userId: userStore.userId,
-        objectId: props.object.id,
-        position: { x: finalX, y: finalY }
-      })
-
       socket.value.emit('object:sync', {
         sessionId: gameStore.sessionId,
         userId: userStore.userId,
@@ -103,6 +93,24 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
     emit('drag-end', props.object)
   }
 })
+
+
+const handleDrawFromDeck = () => {
+  if (!isDeck.value) return
+  emit('draw-from-deck', props.object.id, props.object.position)
+}
+
+const handleShuffleDeck = () => {
+  if (!isDeck.value) return
+  emit('shuffle-deck', props.object.id)
+}
+
+const handleSpreadDeck = () => {
+  if (!isDeck.value) return
+  emit('spread-deck', props.object.id, props.object.position)
+}
+
+
 
 onMounted(() => {
   if (props.object.position && objectRef.value) {
@@ -120,22 +128,22 @@ const objectStyles = computed(() => ({
   width: `${props.object.width || 100}px`,
   height: `${props.object.height || 100}px`,
   zIndex: isExpanded.value ? 1000 : (props.object.stackId ? (props.object.stackIndex + 1) * 10 : (props.object.zIndex || 1)),
-  // transform: isExpanded.value ? 'scale(1.5)' : `rotate(${props.object.rotation}deg)`,
-  // transition: isExpanded.value ? 'transform 0.2s ease-out, z-index 0s' : 'transform 0.3s ease-in-out'
+  transformOrigin: 'center center'
 }))
 
-const getObjectIcon = (type) => {
-  const icons = { card: '🎴', dice: '🎲', token: '🔵', model: '🎭', image: '🖼️', text: '📝' }
-  return icons[type] || '📦'
-}
-
 const handleClick = (event) => {
-  if (isDragging.value) return
+  if (isDragging.value || isExpanded.value) return
   event.stopPropagation()
   emit('select', props.object, event)
 }
 
 const handleContextMenu = (event) => {
+  if (isDeck.value && deckCardCount.value > 0) {
+    event.preventDefault()
+    emit('draw-from-deck', props.object.id, props.object.position)
+    return
+  }
+
   event.preventDefault()
   event.stopPropagation()
   contextMenuPosition.value = { x: event.clientX, y: event.clientY }
@@ -145,20 +153,20 @@ const handleContextMenu = (event) => {
 
 const handleDelete = () => {
   emit('delete', props.object.id)
-
   if (socket?.value && gameStore.sessionId) {
     socket.value.emit('object:delete', {
       sessionId: gameStore.sessionId,
       objectId: props.object.id
     })
   }
-
+  if (isDeck.value) {
+    gameStore.removeDeck(props.object.id)
+  }
   showContextMenu.value = false
 }
 
 const handleAddHand = () => {
-  emit('add-object-to-hand', props.object)
-  emit('delete', props.object.id)
+  emit('add-to-hand', props.object.id)
 }
 
 const handleDuplicate = () => {
@@ -234,7 +242,7 @@ const isTopOfStack = computed(() => {
 
 <template>
   <div ref="objectRef" class="absolute select-none game-object group" :style="objectStyles" @click="handleClick"
-    @contextmenu="handleContextMenu" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
+    @contextmenu.prevent="handleContextMenu" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <div class="w-full h-full rounded-2xl transition-all duration-300 relative" :class="[
       isSelected
         ? 'ring-2 ring-violet-400 shadow-[0_0_40px_rgba(139,92,246,0.5)] scale-105'
@@ -265,23 +273,42 @@ const isTopOfStack = computed(() => {
         </div>
       </div>
 
-      <!-- Stack badge -->
       <div v-if="stackCount > 1"
         class="absolute -top-2 -right-2 z-20 w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center shadow-lg">
         {{ stackCount }}
       </div>
 
-      <!-- Card content -->
       <div class="w-full h-full flex items-center justify-center relative">
+        <template v-if="isDeck">
+          <div class="w-full h-full relative">
+            <div class="w-full h-full rounded-lg flex flex-col items-center justify-center border-2 transition-all"
+              :class="[
+                deckCardCount > 0
+                  ? 'bg-gradient-to-br from-violet-900 to-slate-900 border-violet-500/50'
+                  : 'bg-gradient-to-br from-slate-700 to-slate-800 border-slate-500/30'
+              ]">
+              <div class="text-4xl mb-2"></div>
+              <div class="text-white font-bold text-2xl">{{ deckCardCount }}</div>
+              <div class="text-slate-400 text-xs">карт</div>
+              <div class="text-slate-300 text-xs mt-2 text-center px-2 line-clamp-2 max-w-[90%]">
+                {{ object.label || 'Колода' }}
+              </div>
+            </div>
+            <div v-if="deckCardCount === 0"
+              class="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-lg pointer-events-none">
+              <div class="text-slate-400 text-xs text-center">Пусто</div>
+            </div>
+          </div>
+        </template>
         <!-- Card type: render with flip -->
-        <template v-if="object.type === 'card'">
+        <template v-else-if="object.type === 'card'">
           <!-- Face up -->
           <div v-if="object.faceUp !== false" class="w-full h-full flex flex-col items-center justify-center p-2">
             <template v-if="object.cardData?.frontImage">
               <img :src="object.cardData.frontImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
             </template>
             <template v-else>
-              <div class="text-3xl filter drop-shadow-lg">🎴</div>
+              <div class="text-3xl filter drop-shadow-lg"></div>
               <div v-if="object.label" class="absolute bottom-2 left-0 right-0 text-center">
                 <span class="text-xs font-medium px-2 py-1 rounded-full glass text-slate-300">
                   {{ object.label }}
@@ -290,12 +317,11 @@ const isTopOfStack = computed(() => {
             </template>
           </div>
           <!-- Face down (card back) -->
-          <div v-else
-            class="w-full h-full flex items-center justify-center rounded-xl">
+          <div v-else class="w-full h-full flex items-center justify-center rounded-xl">
             <div v-if="object.cardData?.backImage">
               <img :src="object.cardData.backImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
             </div>
-            <div v-else class="text-5xl opacity-50">🎴</div>
+            <div v-else class="text-5xl opacity-50"></div>
           </div>
         </template>
 
@@ -307,7 +333,6 @@ const isTopOfStack = computed(() => {
         <!-- Default: icon + label -->
         <template v-else>
           <div class="text-5xl filter drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-            {{ getObjectIcon(object.type) }}
           </div>
           <div v-if="object.label" class="absolute bottom-2 left-0 right-0 text-center">
             <span class="text-xs font-medium px-2 py-1 rounded-full glass text-slate-300">
@@ -316,6 +341,7 @@ const isTopOfStack = computed(() => {
           </div>
         </template>
       </div>
+
 
       <template v-if="isSelected">
         <div
@@ -348,15 +374,27 @@ const isTopOfStack = computed(() => {
           title="Повернуть">
           <RotateCw class="w-4 h-4" />
         </button>
-        <button @click.stop="handleDuplicate"
+        <button v-if="!isDeck" @click.stop="handleDuplicate"
           class="p-2 rounded-lg hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition-colors"
           title="Копировать">
           <Copy class="w-4 h-4" />
         </button>
-        <button @click.stop="handleAddHand"
+        <button v-if="!isDeck" @click.stop="handleAddHand"
           class="p-2 rounded-lg hover:bg-red-500/20 text-slate-300 hover:text-orange-400 transition-colors"
           title="Взять в руку">
           <Hand class="w-4 h-4" />
+        </button>
+        <button v-if="isDeck && deckCardCount > 0" @click.stop="handleDrawFromDeck"
+          class="p-2 rounded-lg  hover:bg-emerald-500 text-slate-300 hover:text-white text-xs transition-all flex items-center gap-1">
+          <Plus class="w-3 h-3" />
+        </button>
+        <button v-if="isDeck && deckCardCount > 1" @click.stop="handleShuffleDeck"
+          class="p-1.5 rounded-lg hover:bg-blue-600/30 text-slate-300 hover:text-blue-400 transition-all">
+          <Shuffle class="w-4 h-4" />
+        </button>
+        <button v-if="isDeck && deckCardCount > 0" @click.stop="handleSpreadDeck"
+          class="p-1.5 rounded-lg hover:bg-orange-600/30 text-slate-300 hover:text-orange-400 transition-all">
+          <LayoutGrid class="w-4 h-4" />
         </button>
         <button @click.stop="handleDelete"
           class="p-2 rounded-lg hover:bg-red-500/20 text-slate-300 hover:text-red-400 transition-colors"

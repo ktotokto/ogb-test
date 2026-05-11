@@ -12,7 +12,8 @@ export function useInteractDrag(elementRef, options = {}) {
         restrictToParent = false,
         snapToGrid = false,
         gridSize = 20,
-        inertia = true
+        inertia = true,
+        boardRotation = 0
     } = options
 
     const isDragging = ref(false)

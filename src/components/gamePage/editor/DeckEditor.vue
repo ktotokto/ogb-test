@@ -17,13 +17,28 @@ const searchQuery = ref('')
 const newDeckName = ref('')
 const selectedCards = ref([])
 
-// Загрузка файлов
 const cardImages = ref([])
 const cardBackImage = ref(null)
 const isUploading = ref(false)
 const uploadedCards = ref([])
 
-const decks = computed(() => gameStore.decks || [])
+const decks = computed(() => {
+  const list = gameStore.decks
+  if (!list) {
+    return []
+  }
+  if (list.length === 0 && gameStore.objects) {
+    return gameStore.objects
+      .filter(o => o.type === 'deck')
+      .map(o => ({
+        id: o.id,
+        name: o.label || o.name || 'Колода',
+        cards: o.cards || [],
+        cardCount: o.cardCount || 0
+      }))
+  }
+  return list
+})
 
 const filteredDecks = computed(() => {
   if (!searchQuery.value) return decks.value
@@ -36,7 +51,6 @@ const availableCards = computed(() => {
   return gameStore.objects.filter(obj => obj.type === 'card')
 })
 
-// Обработка загрузки картинок карт
 const handleCardImagesUpload = (event) => {
   const files = Array.from(event.target.files)
   if (files.length === 0) return
@@ -55,7 +69,6 @@ const handleCardImagesUpload = (event) => {
         label: `Карта ${index + 1}`
       })
 
-      // Когда все файлы загружены
       if (uploadedCards.value.length === files.length) {
         isUploading.value = false
       }
@@ -64,7 +77,6 @@ const handleCardImagesUpload = (event) => {
   })
 }
 
-// Обработка загрузки рубашки
 const handleCardBackUpload = (event) => {
   const file = event.target.files[0]
   if (!file) return
@@ -79,12 +91,10 @@ const handleCardBackUpload = (event) => {
   reader.readAsDataURL(file)
 }
 
-// Удалить карту из загруженных
 const removeUploadedCard = (index) => {
   uploadedCards.value.splice(index, 1)
 }
 
-// Переместить карту
 const moveUploadedCard = (index, direction) => {
   const newIndex = index + direction
   if (newIndex < 0 || newIndex >= uploadedCards.value.length) return
@@ -110,7 +120,6 @@ const startEditDeck = (deck) => {
   isCreating.value = true
 }
 
-// Создать колоду из загруженных картинок
 const createDeckFromImages = async () => {
   if (!newDeckName.value.trim()) {
     alert('Введите название колоды!')
@@ -132,7 +141,6 @@ const createDeckFromImages = async () => {
     const cardWidth = 140
     const cardHeight = 200
 
-    // Создаем карты из загруженных изображений
     for (let i = 0; i < uploadedCards.value.length; i++) {
       const uploadedCard = uploadedCards.value[i]
       const row = Math.floor(i / cardsPerRow)
@@ -162,29 +170,15 @@ const createDeckFromImages = async () => {
         }
       }
 
-      // Добавляем карту в store
-      gameStore.addObject(newCard)
-
-      // Отправляем через WebSocket
-      if (socket.value && gameStore.sessionId) {
-        await socket.value.emit('object:create', {
-          sessionId: gameStore.sessionId,
-          object: newCard
-        })
-      }
-
-      // Добавляем в колоду
       deckCards.push({
         id: newCard.id,
         label: newCard.label,
         cardData: newCard.cardData
       })
 
-      // Небольшая задержка чтобы не перегружать
       await new Promise(resolve => setTimeout(resolve, 50))
     }
 
-    // Создаем колоду
     const deckData = {
       id: `deck_${Date.now()}`,
       name: newDeckName.value,
@@ -204,7 +198,6 @@ const createDeckFromImages = async () => {
       })
     }
 
-    // Очищаем
     uploadedCards.value = []
     cardBackImage.value = null
     newDeckName.value = ''
@@ -221,38 +214,28 @@ const createDeckFromImages = async () => {
 }
 
 const selectDeckToAdd = (deck) => {
-  // Передаём в GameBoard через emit или store
   emit('select-deck', deck)
 }
 
 const saveDeck = () => {
-  if (!newDeckName.value.trim()) return
+  if (!newDeckName.value.trim()) return alert('Введите название колоды!')
 
   const deckData = {
     id: editingDeck.value?.id || `deck_${Date.now()}`,
-    name: newDeckName.value,
-    cards: selectedCards.value,
-    createdAt: new Date().toISOString(),
-    createdBy: userStore.userId
+    name: newDeckName.value.trim(),
+    cards: deckCards.value,
+    cardCount: deckCards.value.length
   }
 
   if (editingDeck.value) {
-    gameStore.updateDeck(editingDeck.value.id, deckData)
+    gameStore.updateDeck(deckData.id, deckData)
+    socket.value?.emit('deck:update', { sessionId: gameStore.sessionId, deck: deckData })
   } else {
-    gameStore.addDeck(deckData)
+    gameStore.addDeck(deckData) 
+    socket.value?.emit('deck:create', { sessionId: gameStore.sessionId, deck: deckData })
   }
 
-  if (socket.value && gameStore.sessionId) {
-    socket.value.emit('deck:save', {
-      sessionId: gameStore.sessionId,
-      deck: deckData
-    })
-  }
-
-  isCreating.value = false
-  editingDeck.value = null
-  newDeckName.value = ''
-  selectedCards.value = []
+  cancelEdit()
 }
 
 const cancelEdit = () => {
@@ -307,41 +290,6 @@ const removeCardFromDeck = (cardId) => {
   selectedCards.value = selectedCards.value.filter(c => c.id !== cardId)
 }
 
-const spawnDeck = (deck) => {
-  if (!confirm(`Создать ${deck.cards?.length || 0} карт на поле?`)) return
-
-  const centerX = 50000
-  const centerY = 50000
-
-  deck.cards?.forEach((card, index) => {
-    const newCard = {
-      id: `card_${Date.now()}_${index}`,
-      type: 'card',
-      label: card.label,
-      position: {
-        x: centerX + (index % 5) * 140 - 280,
-        y: centerY + Math.floor(index / 5) * 200 - 200
-      },
-      width: 120,
-      height: 180,
-      rotation: 0,
-      owner: userStore.userId,
-      ownerId: userStore.userId,
-      inHand: false,
-      faceUp: true,
-      cardData: card.cardData
-    }
-
-    gameStore.addObject(newCard)
-
-    if (socket.value && gameStore.sessionId) {
-      socket.value.emit('object:create', {
-        sessionId: gameStore.sessionId,
-        object: newCard
-      })
-    }
-  })
-}
 </script>
 
 <template>
@@ -382,10 +330,6 @@ const spawnDeck = (deck) => {
             class="px-2 py-1.5 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded text-xs transition-all">
             <Copy class="w-3 h-3" />
           </button>
-          <button @click="spawnDeck(deck)"
-            class="px-2 py-1.5 bg-emerald-600/50 hover:bg-emerald-500 text-white rounded text-xs transition-all">
-            <Plus class="w-3 h-3" />
-          </button>
           <button @click="deleteDeck(deck.id)"
             class="px-2 py-1.5 bg-red-600/50 hover:bg-red-500 text-white rounded text-xs transition-all">
             <Trash2 class="w-3 h-3" />
@@ -405,7 +349,6 @@ const spawnDeck = (deck) => {
       </button>
     </div>
 
-    <!-- Режим создания из изображений -->
     <div class="space-y-4 p-4 bg-slate-800/30 border border-violet-500/30 rounded-lg">
       <h4 class="text-sm font-medium text-violet-300 flex items-center gap-2">
         <Upload class="w-4 h-4" />
@@ -415,7 +358,6 @@ const spawnDeck = (deck) => {
       <input v-model="newDeckName" type="text" placeholder="Название колоды *"
         class="w-full px-4 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500" />
 
-      <!-- Загрузка рубашки -->
       <div class="space-y-2">
         <label class="text-xs text-slate-400">Рубашка карт (необязательно)</label>
         <div v-if="cardBackImage" class="relative w-full h-24 bg-slate-700/50 rounded-lg overflow-hidden">
@@ -435,7 +377,6 @@ const spawnDeck = (deck) => {
         </label>
       </div>
 
-      <!-- Загрузка карт -->
       <div class="space-y-2">
         <label class="text-xs text-slate-400">Карты (выберите несколько файлов) *</label>
         <label
@@ -448,7 +389,6 @@ const spawnDeck = (deck) => {
         </label>
       </div>
 
-      <!-- Предпросмотр загруженных карт -->
       <div v-if="uploadedCards.length > 0" class="space-y-2">
         <div class="flex items-center justify-between">
           <span class="text-xs text-slate-400">Загружено карт: {{ uploadedCards.length }}</span>

@@ -302,3 +302,101 @@ def save_session_state(session_id):
     except Exception as e:
         print(f"❌ Save error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@game_bp.route('/sessions', methods=['GET'])
+@jwt_required()
+def get_sessions():
+    """Получить все сессии пользователя"""
+    try:
+        current_user_id = get_jwt_identity()
+
+        # Найти все сессии где пользователь является игроком
+        session_players = SessionPlayer.query.filter_by(
+            user_id=current_user_id,
+            is_active=True
+        ).all()
+
+        session_ids = [sp.session_id for sp in session_players]
+
+        # Добавить сессии которые создал пользователь
+        created_sessions = GameSession.query.filter_by(
+            creator_id=current_user_id
+        ).all()
+
+        created_ids = [s.id for s in created_sessions]
+
+        # Объединить и убрать дубликаты
+        all_session_ids = list(set(session_ids + created_ids))
+
+        sessions = GameSession.query.filter(
+            GameSession.id.in_(all_session_ids)
+        ).all()
+
+        return jsonify({
+            'sessions': [s.to_dict() for s in sessions]
+        }), 200
+    except Exception as e:
+        print(f"Get sessions error: {e}")
+        return jsonify({'error': 'Failed to fetch sessions', 'details': str(e)}), 500
+
+
+@game_bp.route('/session/<session_id>', methods=['PUT'])
+@jwt_required()
+def update_session_metadata(session_id):
+    try:
+        current_user_id = get_jwt_identity()
+        session = GameSession.query.get(session_id)
+
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+
+        if session.creator_id != current_user_id:
+            return jsonify({'error': 'Only creator can update session'}), 403
+
+        data = request.get_json()
+
+        if 'name' in data:
+            session.name = data['name']
+        if 'max_players' in data:
+            session.max_players = data['max_players']
+
+        if 'is_private' in data:
+            session.is_private = data['is_private']
+
+        session.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify(session.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update session', 'details': str(e)}), 500
+
+
+@game_bp.route('/session/<session_id>', methods=['DELETE'])
+@jwt_required()
+def delete_session_endpoint(session_id):
+    try:
+        current_user_id = get_jwt_identity()
+        session = GameSession.query.get(session_id)
+
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+
+        if session.creator_id != current_user_id:
+            return jsonify({'error': 'Only creator can delete session'}), 403
+
+        SessionPlayer.query.filter_by(session_id=session_id).delete()
+
+        db.session.delete(session)
+        db.session.commit()
+
+        print(f"Session {session_id} deleted by user {current_user_id}")
+        return jsonify({'message': 'Session deleted', 'sessionId': session_id}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Delete session error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to delete session', 'details': str(e)}), 500

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useUserStore } from './user'
 import axios from 'axios'
+
 
 export const useGameStore = defineStore('game', () => {
   const gameTime = ref(null)
@@ -20,6 +22,7 @@ export const useGameStore = defineStore('game', () => {
   const error = ref(null)
   const decks = ref([])
   const selectedForHand = ref(new Set())
+  const userStore = useUserStore()
 
   const isAdmin = computed(() => {
     return currentPlayer.value?.role === 'creator' || currentPlayer.value?.role === 'admin'
@@ -34,16 +37,12 @@ export const useGameStore = defineStore('game', () => {
     error.value = null
 
     try {
-      console.log('Joining session via WebSocket:', sessionIdValue)
-
       const { useGameWebSocket } = await import('@/composables/useGameWebSocket')
       const { joinSession: wsJoinSession } = useGameWebSocket()
 
       wsJoinSession(sessionIdValue)
 
       await new Promise(resolve => setTimeout(resolve, 1000))
-
-      console.log('Session joined:', sessionId.value)
 
       return session.value
     } catch (err) {
@@ -233,90 +232,197 @@ export const useGameStore = defineStore('game', () => {
       }
     }
   }
-  function addDeck(deck) {
+  function addDeck(deckData, position = { x: 50000, y: 50000 }) {
+    if (objects.value.find(o => o.id === deckData.id && o.type === 'deck')) return
+
+
+    const deck = {
+      id: deckData.id || `deck_${Date.now()}`,
+      name: deckData.name || 'Новая колода',
+      cards: deckData.cards || [],
+      cardCount: (deckData.cards || []).length,
+      createdAt: new Date().toISOString(),
+      createdBy: userStore.userId,
+      position: position
+    }
+
     decks.value.push(deck)
+
+    objects.value.push({
+      id: deck.id,
+      type: 'deck',
+      label: deck.name,
+      position: position,
+      width: 120,
+      height: 180,
+      rotation: 0,
+      owner: userStore.userId,
+      ownerId: userStore.userId,
+      cards: deck.cards,
+      cardCount: deck.cardCount
+    })
+
     debouncedSave()
+    return deck
   }
 
   function updateDeck(deckId, updates) {
     const index = decks.value.findIndex(d => d.id === deckId)
-    if (index !== -1) {
-      decks.value[index] = { ...decks.value[index], ...updates }
-      debouncedSave()
+    if (index === -1) return
+
+    decks.value[index] = { ...decks.value[index], ...updates }
+
+    const boardObj = objects.value.find(o => o.id === deckId && o.type === 'deck')
+    if (boardObj) {
+      Object.assign(boardObj, updates)
+      boardObj.cards = decks.value[index].cards
+      boardObj.cardCount = decks.value[index].cardCount
     }
+
+    debouncedSave()
   }
 
   function removeDeck(deckId) {
     decks.value = decks.value.filter(d => d.id !== deckId)
-    debouncedSave()
+    removeObject(deckId)
   }
 
-  function drawFromDeck(deckId, count = 1) {
+  function addCardToDeck(deckId, cardObj) {
     const deck = decks.value.find(d => d.id === deckId)
-    if (!deck || !deck.cards || deck.cards.length === 0) return []
 
-    const drawnCards = []
-    const centerX = 50000
-    const centerY = 50000
+    if (!deck || !cardObj) { return false }
+    if (!deck.cards) deck.cards = []
+    if (deck.cards.some(c => c.id === cardObj.id)) { return false }
+    
+    deck.cards.push({
+      id: cardObj.id,
+      label: cardObj.label,
+      cardData: cardObj.cardData
+    })
+    deck.cardCount = deck.cards.length
+
+    const boardDeck = objects.value.find(o => o.id === deckId && o.type === 'deck')
+    if (boardDeck) {
+      boardDeck.cards = [...deck.cards]
+      boardDeck.cardCount = deck.cardCount
+    }
+
+    debouncedSave()
+    return true
+  }
+
+  function drawFromDeck(deckId, count = 1, position) {
+    const deck = decks.value.find(d => d.id === deckId)
+    if (!deck || !deck.cards?.length) return []
+
+    const drawn = []
+    const cx = position.x
+    const cy = position.y
+
+    const perRow = 5
+    const spacingX = 140
+    const spacingY = 200
+    const cols = Math.min(count, perRow)
+    const startX = cx - (cols * spacingX) / 2 + 60
+    const startY = cy - 200
 
     for (let i = 0; i < count && deck.cards.length > 0; i++) {
-      const cardData = deck.cards.pop()
+      const c = deck.cards.pop()
+      const row = Math.floor(i / perRow)
+      const col = i % perRow
 
-      const newCard = {
+      const card = {
         id: `card_${Date.now()}_${i}`,
         type: 'card',
-        label: cardData.label || 'Карта',
+        label: c.label,
         position: {
-          x: centerX + (Math.random() - 0.5) * 200,
-          y: centerY + (Math.random() - 0.5) * 200
+          x: startX + col * spacingX,
+          y: startY + row * spacingY
         },
         width: 120,
         height: 180,
-        rotation: Math.random() * 10 - 5,
+        rotation: 0,
         owner: userStore.userId,
         ownerId: userStore.userId,
         inHand: false,
         faceUp: true,
-        cardData: cardData.cardData,
+        cardData: c.cardData,
         fromDeck: deckId
       }
 
-      objects.value.push(newCard)
-      drawnCards.push(newCard)
+      objects.value.push(card)
+      drawn.push(card)
     }
 
-    updateDeck(deckId, { cards: deck.cards, cardCount: deck.cards.length })
-    debouncedSave()
+    deck.cardCount = deck.cards.length
+    const boardObj = objects.value.find(o => o.id === deckId && o.type === 'deck')
+    if (boardObj) {
+      boardObj.cards = deck.cards
+      boardObj.cardCount = deck.cardCount
+    }
 
-    return drawnCards
+    debouncedSave()
+    return drawn
   }
 
   function shuffleDeck(deckId) {
     const deck = decks.value.find(d => d.id === deckId)
-    if (!deck || !deck.cards) return
-
+    if (!deck?.cards) return
     deck.cards.sort(() => Math.random() - 0.5)
-    updateDeck(deckId, { cards: deck.cards })
+    const boardObj = objects.value.find(o => o.id === deckId && o.type === 'deck')
+    if (boardObj) boardObj.cards = deck.cards
+    debouncedSave()
   }
 
 
+
+  function spreadDeck(deckId, position) {
+    const deck = decks.value.find(d => d.id === deckId)
+    if (!deck?.cards?.length) return []
+
+    const spread = []
+    const cx = position?.x || 50000
+    const cy = position?.y || 50000
+    const perRow = 5
+    const toSpread = [...deck.cards]
+    deck.cards = []
+    deck.cardCount = 0
+
+    toSpread.forEach((c, i) => {
+      const row = Math.floor(i / perRow)
+      const col = i % perRow
+      const card = {
+        id: `card_${Date.now()}_${i}`,
+        type: 'card', label: c.label,
+        position: { x: cx + col * 140 - 280, y: cy + row * 200 - 200 },
+        width: 120, height: 180, rotation: 0,
+        owner: userStore.userId, ownerId: userStore.userId,
+        inHand: false, faceUp: true, cardData: c.cardData, fromDeck: deckId
+      }
+      objects.value.push(card)
+      spread.push(card)
+    })
+
+    const boardObj = objects.value.find(o => o.id === deckId && o.type === 'deck')
+    if (boardObj) { boardObj.cards = []; boardObj.cardCount = 0 }
+    debouncedSave()
+    return spread
+  }
+
   function setCurrentPlayer(player) {
     currentPlayer.value = player
-    console.log('Current player set:', player)
   }
 
   function addPlayer(player) {
     const existing = players.value.find(p => p.user_id === player.user_id || p.id === player.id)
     if (!existing) {
       players.value.push(player)
-      console.log('Player added:', player)
     }
   }
 
   function removePlayer(playerId) {
     const before = players.value.length
     players.value = players.value.filter(p => p.user_id !== playerId && p.id !== playerId)
-    console.log(`👥 Player removed: ${playerId} (${before} -> ${players.value.length})`)
 
     if (currentPlayer.value?.user_id === playerId) {
       currentPlayer.value = null
@@ -341,11 +447,10 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function addObject(obj) {
+    if (objects.value.find(o => o.id === obj.id)) return
     const existing = objects.value.find(o => o.id === obj.id)
     if (!existing) {
       objects.value.push(obj)
-      console.log('Object added:', obj.id)
-
       debouncedSave()
     }
   }
@@ -354,17 +459,12 @@ export const useGameStore = defineStore('game', () => {
     const obj = objects.value.find(o => o.id === objectId)
     if (obj) {
       Object.assign(obj, updates)
-      console.log('Object updated:', objectId, updates)
-
       debouncedSave()
     }
   }
 
   function removeObject(objectId) {
-    const before = objects.value.length
     objects.value = objects.value.filter(o => o.id !== objectId)
-    console.log(`Object removed: ${objectId} (${before} -> ${objects.value.length})`)
-
     debouncedSave()
   }
 
@@ -384,7 +484,6 @@ export const useGameStore = defineStore('game', () => {
         }
 
         await axios.post(`/api/game/session/${sessionId.value}/save`, { state })
-        console.log('Auto-saved game state')
       } catch (err) {
         console.error('Auto-save failed:', err)
       }
@@ -467,6 +566,8 @@ export const useGameStore = defineStore('game', () => {
     createStack,
     addToStack,
     removeFromStack,
-    unstackAll
+    unstackAll,
+    addCardToDeck,
+    spreadDeck
   }
 })

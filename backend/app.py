@@ -13,7 +13,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-socketio = SocketIO(cors_allowed_origins="*")
+socketio = SocketIO(
+    cors_allowed_origins="*",
+    async_mode='threading',
+    max_http_buffer_size=1e8,
+    ping_timeout=60,
+    ping_interval=25,
+    logger=False,
+    engineio_logger=False
+)
 jwt = JWTManager()
 
 

@@ -2,6 +2,7 @@ import { io } from 'socket.io-client'
 import { ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useGameStore } from '@/stores/game'
+import { tryOnMounted } from '@vueuse/core'
 
 let socketInstance = null
 let isConnectedInstance = ref(false)
@@ -24,47 +25,37 @@ export function useGameWebSocket() {
       })
 
       socketInstance.value.on('connect', () => {
-        isConnectedInstance.value = true
-        console.log('Connected to WebSocket')
+        isConnectedInstance.value = tryOnMounted
         socketInstance.value.emit('friends:get_list')
         socketInstance.value.emit('friends:get_requests')
       })
 
       socketInstance.value.on('disconnect', () => {
         isConnectedInstance.value = false
-        console.log('Disconnected from WebSocket')
-      })
-
-      socketInstance.value.on('error', (data) => {
-        console.error('WebSocket error:', data)
       })
 
       // === Session Events ===
       socketInstance.value.on('session:joined', (data) => {
-        console.log('📥 Received session:joined:', data)
         gameStore.setSession(data.session)
         if (data.players) {
           gameStore.players = data.players
-          console.log('👥 Players from session:joined:', data.players)
         }
         gameStore.setCurrentPlayer(data.session.players?.find(p => p.user_id === userStore.userId))
       })
 
       socketInstance.value.on('player:joined', (data) => {
-        console.log('📥 Received player:joined:', data)
         gameStore.addPlayer(data.player || data.user)
       })
 
       socketInstance.value.on('player:left', (data) => {
-        console.log('📥 Received player:left:', data)
         gameStore.removePlayer(data.userId)
       })
 
-      // === Object Events ===
       socketInstance.value.on('object:created', (data) => {
-        if (data.sessionId === gameStore.sessionId) {
-          gameStore.addObject(data.object)
-        }
+        if (data.sessionId !== gameStore.sessionId) return
+        if (data.object.ownerId === userStore.userId || data.userId === userStore.userId) return
+
+        gameStore.addObject(data.object)
       })
 
       socketInstance.value.on('object:updated', (data) => {
@@ -80,26 +71,15 @@ export function useGameWebSocket() {
       })
 
       socketInstance.value.on('object:sync', (data) => {
-        console.log('📥 Received object:sync:', {
-          sessionId: data.sessionId,
-          userId: data.userId,
-          currentSession: gameStore.sessionId,
-          currentUserId: userStore.userId,
-          update: data.update
-        })
-
         if (data.sessionId !== gameStore.sessionId) {
-          console.log('❌ Wrong session, ignoring')
           return
         }
 
         if (data.userId === userStore.userId) {
-          console.log('⏭️ Skipping own event')
           return
         }
 
         const { objectId, changes } = data.update
-        console.log('Applying update:', { objectId, changes })
         gameStore.updateObject(objectId, changes)
       })
 
@@ -115,19 +95,7 @@ export function useGameWebSocket() {
         }
       })
 
-      socketInstance.value.on('invitation:sent', (data) => {
-        console.log('Invitation sent:', data.invitation)
-      })
 
-      socketInstance.value.on('invitation:accepted', (data) => {
-        console.log('Invitation accepted')
-      })
-
-      socketInstance.value.on('invitation:declined', (data) => {
-        console.log('Invitation declined')
-      })
-
-      // === Friends Events ===
       socketInstance.value.on('friends:list', (data) => {
         userStore.setFriends(data.friends.map(f => f.user))
       })

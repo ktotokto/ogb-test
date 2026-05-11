@@ -31,7 +31,6 @@ export function usePlayerCursors(socket, gameStore) {
     if (!socket.value) return
     
     socket.value.on('cursor:move', (data) => {
-      console.log('📥 Cursor move received:', data)
       
       if (data.sessionId !== gameStore.sessionId) return
       if (data.userId === userStore.userId) return
@@ -39,14 +38,13 @@ export function usePlayerCursors(socket, gameStore) {
       otherCursors.value[data.userId] = {
         x: data.cursor.x,
         y: data.cursor.y,
-        username: data.username || 'Player',  // ← username из бэкенда!
+        username: data.username || 'Player',  
         color: getUserColor(data.userId),
         lastSeen: Date.now()
       }
     })
     
     socket.value.on('cursor:leave', (data) => {
-      console.log('📥 Cursor leave received:', data)
       if (data.sessionId !== gameStore.sessionId) return
       delete otherCursors.value[data.userId]
     })

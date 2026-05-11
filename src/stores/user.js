@@ -11,7 +11,7 @@ export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || null)
   const isLoading = ref(false)
   const error = ref(null)
-  
+
   const friends = ref([])
   const friendRequests = ref([])
 
@@ -51,7 +51,6 @@ export const useUserStore = defineStore('user', () => {
       return true
     } catch (err) {
       error.value = err.response?.data?.error || 'Login failed'
-      console.error('Login error:', err)
       return false
     } finally {
       isLoading.value = false
@@ -119,6 +118,15 @@ export const useUserStore = defineStore('user', () => {
     )
   }
 
+
+  function setFriends(list) {
+    friends.value = Array.isArray(list) ? list : []
+  }
+
+  function setFriendRequests(list) {
+    friendRequests.value = Array.isArray(list) ? list : []
+  }
+
   function addFriend(friend) {
     if (!friends.value.find(f => f.id === friend.id)) {
       friends.value.push(friend)
@@ -139,12 +147,11 @@ export const useUserStore = defineStore('user', () => {
   initAuth()
 
   return {
-    // State
     currentUser,
     token,
     isLoading,
     error,
-    friends,           
+    friends,
     friendRequests,
     isAuthenticated,
     onlineFriends,
@@ -158,6 +165,8 @@ export const useUserStore = defineStore('user', () => {
     removeFriendRequest,
     addFriend,
     removeFriend,
-    updateFriendStatus
+    updateFriendStatus,
+    setFriends,
+    setFriendRequests
   }
 })
