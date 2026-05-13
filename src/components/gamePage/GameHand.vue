@@ -3,8 +3,8 @@ import { ref, onUnmounted, watch } from 'vue'
 
 const isDisplay = ref(true)
 const hoveredCardId = ref(null)
-const handHeight = ref(320)
-const handWidth = ref(1000)
+const handHeight = ref(250)
+const handWidth = ref(500)
 const isResizingHeight = ref(false)
 const isResizingWidth = ref(false)
 const resizeStartY = ref(0)
@@ -45,7 +45,7 @@ const startResizeHeight = (e) => {
 const onResizeHeight = (e) => {
   if (!isResizingHeight.value) return
   const delta = resizeStartY.value - e.clientY
-  handHeight.value = Math.max(150, Math.min(600, resizeStartHeight.value + delta))
+  handHeight.value = Math.max(150, Math.min(400, resizeStartHeight.value + delta))
 }
 
 const stopResizeHeight = () => {
@@ -116,10 +116,10 @@ onUnmounted(() => {
 
 <template>
   <div class="hand-container" :style="{ width: `${handWidth}px` }">
-    <div class="resize-handle-top" @mousedown="startResizeHeight">
+    <div v-if="isDisplay" class="resize-handle-top" @mousedown="startResizeHeight">
       <div class="resize-grip-h"></div>
     </div>
-    <div class="resize-handle-right" @mousedown="startResizeWidth">
+    <div v-if="isDisplay" class="resize-handle-right" @mousedown="startResizeWidth">
       <div class="resize-grip-v"></div>
     </div>
     

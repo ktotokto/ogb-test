@@ -10,6 +10,9 @@ const { socket } = useGameWebSocket()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 
+// console.log(gameStore.objects);
+
+
 const props = defineProps({
   object: { type: Object, required: true },
   isSelected: { type: Boolean, default: false },
@@ -25,7 +28,7 @@ const props = defineProps({
 const emit = defineEmits([
   'select', 'move', 'resize', 'delete',
   'duplicate', 'rotate', 'drag-start', 'drag-end',
-  'flip', 'stack-mode', 'stack-remove', 'add-object-to-hand',
+  'flip', 'stack-remove', 'add-object-to-hand',
   'draw-from-deck', 'shuffle-deck', 'spread-deck'
 ])
 
@@ -300,9 +303,7 @@ const isTopOfStack = computed(() => {
             </div>
           </div>
         </template>
-        <!-- Card type: render with flip -->
         <template v-else-if="object.type === 'card'">
-          <!-- Face up -->
           <div v-if="object.faceUp !== false" class="w-full h-full flex flex-col items-center justify-center p-2">
             <template v-if="object.cardData?.frontImage">
               <img :src="object.cardData.frontImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
@@ -316,7 +317,6 @@ const isTopOfStack = computed(() => {
               </div>
             </template>
           </div>
-          <!-- Face down (card back) -->
           <div v-else class="w-full h-full flex items-center justify-center rounded-xl">
             <div v-if="object.cardData?.backImage">
               <img :src="object.cardData.backImage" class="w-full h-full object-cover rounded-xl" draggable="false" />
@@ -325,12 +325,10 @@ const isTopOfStack = computed(() => {
           </div>
         </template>
 
-        <!-- Image type -->
         <template v-else-if="object.type === 'image' && object.url">
           <img :src="object.url" class="w-full h-full object-contain rounded-lg" draggable="false" />
         </template>
 
-        <!-- Default: icon + label -->
         <template v-else>
           <div class="text-5xl filter drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300">
           </div>
@@ -363,11 +361,6 @@ const isTopOfStack = computed(() => {
           class="p-2 rounded-lg hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 transition-colors"
           :title="object.faceUp === false ? 'Повернуть лицом вверх' : 'Повернуть лицом вниз'">
           <FlipVertical class="w-4 h-4" />
-        </button>
-        <button v-if="object.type === 'card'" @click.stop="emit('stack-mode', object.id)"
-          class="p-2 rounded-lg hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition-colors"
-          title="Добавить в стопку">
-          <Layers class="w-4 h-4" />
         </button>
         <button @click.stop="handleRotate"
           class="p-2 rounded-lg hover:bg-violet-500/20 text-slate-300 hover:text-violet-300 transition-colors"

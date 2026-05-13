@@ -3,14 +3,13 @@ import { ref, computed } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
-import { Plus, Trash2, Search, Square, Circle, Type, Image } from 'lucide-vue-next'
+import { Trash2, Search, Square, Circle, Type, Image } from 'lucide-vue-next'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const { socket } = useGameWebSocket()
 
 const searchQuery = ref('')
-const selectedType = ref('card')
 
 const objectTypes = [
   { id: 'card', label: 'Карта', icon: Square },

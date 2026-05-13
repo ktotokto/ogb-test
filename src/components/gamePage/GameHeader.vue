@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Clock, Save, UserPlus, LogOut, Wifi, WifiOff } from 'lucide-vue-next'
-import { useGameStore } from '@/stores/game'
+import { Clock} from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 

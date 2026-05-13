@@ -27,6 +27,7 @@ export const useUserStore = defineStore('user', () => {
       try {
         const response = await axios.get('/api/auth/me')
         currentUser.value = response.data.user || response.data
+
       } catch (err) {
         logout()
       }
@@ -75,7 +76,6 @@ export const useUserStore = defineStore('user', () => {
       return true
     } catch (err) {
       error.value = err.response?.data?.error || 'Registration failed'
-      console.error('Register error:', err)
       return false
     } finally {
       isLoading.value = false
@@ -97,8 +97,21 @@ export const useUserStore = defineStore('user', () => {
       const response = await axios.get('/api/friends')
       friends.value = (response.data || []).map(f => f.user)
     } catch (err) {
-      console.error('Failed to fetch friends:', err)
-      friends.value = []  // Защита
+      friends.value = []
+    }
+  }
+
+  async function fetchUserById(id) {
+    isLoading.value = true
+    error.value = null
+    try {
+      const response = await axios.get(`/api/users/${id}`)
+      return response.data.user || response.data
+    } catch (err) {
+      error.value = err.response?.data?.error || 'Failed to fetch user'
+      return null
+    } finally {
+      isLoading.value = false
     }
   }
 
@@ -107,8 +120,7 @@ export const useUserStore = defineStore('user', () => {
       const response = await axios.get('/api/friends/requests')
       friendRequests.value = response.data || []
     } catch (err) {
-      console.error('Failed to fetch requests:', err)
-      friendRequests.value = []  // Защита
+      friendRequests.value = []  
     }
   }
 
@@ -167,6 +179,7 @@ export const useUserStore = defineStore('user', () => {
     removeFriend,
     updateFriendStatus,
     setFriends,
-    setFriendRequests
+    setFriendRequests,
+    fetchUserById
   }
 })

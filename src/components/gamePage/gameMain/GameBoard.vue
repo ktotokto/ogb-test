@@ -343,8 +343,6 @@ const handleObjectMove = ({ objectId, position, final }) => {
   if (final && obj.type === 'card') {
     const overlappedDeck = checkDeckOverlap(position, objectId)
     if (overlappedDeck) {
-      console.log(overlappedDeck);
-      
       gameStore.addCardToDeck(overlappedDeck.id, obj)
       gameStore.removeObject(objectId)
 
@@ -488,9 +486,15 @@ const handleObjectSelect = (object, event) => {
       selectedObjects.value.add(gameStore.objects[i].id)
     }
   } else {
+    const index = gameStore.objects.findIndex(obj => obj.id === object.id)
+    if (index !== -1) { gameStore.objects.splice(index, 1) }
+    gameStore.objects.unshift(object)
+    
+    console.log(gameStore.objects)
+    
     selectedObjects.value.clear()
     selectedObjects.value.add(object.id)
-  }
+}
 }
 
 const handleObjectDelete = (objectId) => {
@@ -518,7 +522,7 @@ const handleObjectDelete = (objectId) => {
   }
 }
 
-const handleObjectDuplicate = (object) => {
+const handleObjectDuplicate = (object) => {  
   const newObject = {
     ...object,
     id: `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

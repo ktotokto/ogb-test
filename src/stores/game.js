@@ -5,7 +5,6 @@ import axios from 'axios'
 
 
 export const useGameStore = defineStore('game', () => {
-  const gameTime = ref(null)
   const sessionId = ref(null)
   const session = ref(null)
   const players = ref([])

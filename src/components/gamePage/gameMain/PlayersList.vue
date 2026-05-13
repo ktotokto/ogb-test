@@ -1,54 +1,69 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
-import { Crown, Star, User, Wifi, WifiOff, Circle } from 'lucide-vue-next'
+import { Crown, Star, User } from 'lucide-vue-next'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
 
 const players = computed(() => gameStore.players || [])
+const players_avatars = ref([])
+
+const getAvatar = async (player) => {
+  const user = await userStore.fetchUserById(player.user_id)
+  return user.avatar_url
+}
+
+players.value.forEach(element => {
+  getAvatar(element).then(url => {
+    players_avatars.value.push({
+      userId: element.user_id,
+      url: url
+    })
+  })
+})
 
 const currentUserId = computed(() => userStore.userId)
 
 const isMe = (player) => {
-  return player.user_id === currentUserId.value || 
-         player.user?.id === currentUserId.value ||
-         player.id === currentUserId.value
+  return player.user_id === currentUserId.value ||
+    player.user?.id === currentUserId.value ||
+    player.id === currentUserId.value
 }
 
 const roleConfig = {
-  creator: { 
-    icon: Crown, 
-    color: 'from-amber-400 to-orange-500', 
-    bg: 'bg-amber-500/20', 
-    text: 'text-amber-400', 
-    border: 'border-amber-500/30', 
+  creator: {
+    icon: Crown,
+    color: 'from-amber-400 to-orange-500',
+    bg: 'bg-amber-500/20',
+    text: 'text-amber-400',
+    border: 'border-amber-500/30',
     label: 'Создатель'
   },
-  admin: { 
-    icon: Star, 
-    color: 'from-violet-400 to-purple-500', 
-    bg: 'bg-violet-500/20', 
-    text: 'text-violet-400', 
-    border: 'border-violet-500/30', 
-    label: 'Админ' 
+  admin: {
+    icon: Star,
+    color: 'from-violet-400 to-purple-500',
+    bg: 'bg-violet-500/20',
+    text: 'text-violet-400',
+    border: 'border-violet-500/30',
+    label: 'Админ'
   },
-  player: { 
-    icon: User, 
-    color: 'from-slate-400 to-slate-500', 
-    bg: 'bg-slate-500/20', 
-    text: 'text-slate-400', 
-    border: 'border-slate-500/30', 
-    label: 'Игрок' 
+  player: {
+    icon: User,
+    color: 'from-slate-400 to-slate-500',
+    bg: 'bg-slate-500/20',
+    text: 'text-slate-400',
+    border: 'border-slate-500/30',
+    label: 'Игрок'
   },
-  guest: { 
-    icon: User, 
-    color: 'from-slate-400 to-slate-500', 
-    bg: 'bg-slate-500/20', 
-    text: 'text-slate-400', 
-    border: 'border-slate-500/30', 
-    label: 'Гость' 
+  guest: {
+    icon: User,
+    color: 'from-slate-400 to-slate-500',
+    bg: 'bg-slate-500/20',
+    text: 'text-slate-400',
+    border: 'border-slate-500/30',
+    label: 'Гость'
   }
 }
 
@@ -57,11 +72,6 @@ const statusConfig = {
   away: { color: 'bg-amber-400', glow: '', label: 'Отошёл' },
   offline: { color: 'bg-slate-500', glow: '', label: 'Оффлайн' },
   unknown: { color: 'bg-slate-600', glow: '', label: 'Неизвестно' }
-}
-
-const getAvatar = (player) => {
-  const name = player.user?.username || player.username || player.name || '?'
-  return name.charAt(0).toUpperCase()
 }
 
 const getName = (player) => {
@@ -86,43 +96,40 @@ const getRole = (player) => {
       Игроки
       <span class="text-xs px-2 py-1 rounded-full glass text-slate-400">{{ players.length }}</span>
     </h2>
-    
+
     <div v-if="players.length === 0" class="text-center py-8 text-slate-500 text-sm">
       Пока нет игроков
     </div>
-    
+
     <div v-else class="space-y-3">
-      <div v-for="player in players" :key="player.user_id || player.id" 
-           class="pb-3 group p-4 rounded-xl glass-light hover:bg-white/5 transition-all duration-300 border border-transparent"
-           :class="[
-             isMe(player) 
-               ? 'border-violet-500/50 bg-violet-500/5 ring-1 ring-violet-500/30' 
-               : 'hover:border-violet-500/30'
-           ]">
-        
+      <div v-for="player in players" :key="player.user_id || player.id"
+        class="pb-3 group p-4 rounded-xl glass-light hover:bg-white/5 transition-all duration-300 border border-transparent"
+        :class="[
+          isMe(player)
+            ? 'border-violet-500/50 bg-violet-500/5 ring-1 ring-violet-500/30'
+            : 'hover:border-violet-500/30'
+        ]">
+
         <div class="flex items-center gap-3">
           <div class="relative">
-            <div 
-              class="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-lg group-hover:scale-110 transition-transform"
+            <div
+              class="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-lg group-hover:scale-110 transition-transform overflow-hidden"
               :class="[
                 isMe(player)
                   ? 'bg-gradient-to-br from-violet-500 to-cyan-500 text-white ring-2 ring-violet-400/50'
                   : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300'
-              ]"
-            >
-              {{ getAvatar(player) }}
+              ]">
+              <img v-if="players_avatars.find(a => a.userId === player.user_id)?.url"
+                :src="players_avatars.find(a => a.userId === player.user_id).url"
+                class="w-full h-full object-cover rounded-xl" />
+              <span v-else>
+                {{ player.name?.substring(0, 2).toUpperCase() || '??' }}
+              </span>
+
             </div>
-            
-            <div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-slate-900" 
-                 :class="[
-                   statusConfig[getStatus(player)].color,
-                   statusConfig[getStatus(player)].glow
-                 ]"
-                 :title="statusConfig[getStatus(player)].label">
-            </div>
-            
-            <div v-if="isMe(player)" 
-                 class="absolute -top-1 -left-1 px-1.5 py-0.5 bg-violet-600 text-white text-[10px] font-bold rounded-full shadow-lg whitespace-nowrap">
+
+            <div v-if="isMe(player)"
+              class="absolute -top-1 -left-1 px-1.5 py-0.5 bg-violet-600 text-white text-[10px] font-bold rounded-full shadow-lg whitespace-nowrap">
               Это вы
             </div>
           </div>
@@ -133,51 +140,47 @@ const getRole = (player) => {
                 {{ getName(player) }}
                 <span v-if="isMe(player)" class="text-xs text-violet-400/70">(вы)</span>
               </span>
-              <component :is="roleConfig[getRole(player)]?.icon || roleConfig.player.icon" 
-                        class="w-4 h-4 flex-shrink-0" 
-                        :class="roleConfig[getRole(player)]?.text || roleConfig.player.text"
-                        :title="roleConfig[getRole(player)]?.label || 'Игрок'" />
+              <component :is="roleConfig[getRole(player)]?.icon || roleConfig.player.icon" class="w-4 h-4 flex-shrink-0"
+                :class="roleConfig[getRole(player)]?.text || roleConfig.player.text"
+                :title="roleConfig[getRole(player)]?.label || 'Игрок'" />
             </div>
-            
+
             <div class="flex items-center gap-2 text-xs">
               <span :class="statusConfig[getStatus(player)].text">
                 {{ statusConfig[getStatus(player)].label }}
               </span>
-              
+
               <span v-if="player.joined_at" class="text-slate-600">•</span>
-              
+
               <span v-if="player.joined_at" class="text-slate-500">
                 {{ new Date(player.joined_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) }}
               </span>
             </div>
           </div>
 
-          <div class="px-3 py-1.5 rounded-lg text-xs font-semibold glass capitalize flex items-center gap-1" 
-               :class="[
-                 roleConfig[getRole(player)]?.bg || roleConfig.player.bg, 
-                 roleConfig[getRole(player)]?.text || roleConfig.player.text, 
-                 roleConfig[getRole(player)]?.border || roleConfig.player.border
-               ]">
+          <div class="px-3 py-1.5 rounded-lg text-xs font-semibold glass capitalize flex items-center gap-1" :class="[
+            roleConfig[getRole(player)]?.bg || roleConfig.player.bg,
+            roleConfig[getRole(player)]?.text || roleConfig.player.text,
+            roleConfig[getRole(player)]?.border || roleConfig.player.border
+          ]">
             <component :is="roleConfig[getRole(player)]?.icon || roleConfig.player.icon" class="w-3 h-3" />
             {{ roleConfig[getRole(player)]?.label || 'Игрок' }}
           </div>
         </div>
-        
-        <div v-if="isMe(player)" 
-             class="absolute left-0 top-4 bottom-4 w-1 bg-gradient-to-b from-violet-500 to-cyan-500 rounded-r-full">
+
+        <div v-if="isMe(player)"
+          class="absolute left-0 top-4 bottom-4 w-1 bg-gradient-to-b from-violet-500 to-cyan-500 rounded-r-full">
         </div>
       </div>
     </div>
 
-    <button 
-      v-if="gameStore.isAdmin"
+    <button v-if="gameStore.isAdmin"
       class="w-full mt-5 py-3.5 rounded-xl border-2 border-dashed border-violet-500/30 hover:border-violet-500/60 text-violet-400 hover:text-violet-300 hover:bg-violet-500/5 transition-all duration-300 flex items-center justify-center gap-2 group font-medium"
-      @click="$emit('invite')"
-    >
+      @click="$emit('invite')">
       <span class="text-xl group-hover:rotate-90 transition-transform">+</span>
       <span>Пригласить игрока</span>
     </button>
-    
+
     <div v-else-if="players.length > 0" class="mt-5 text-center text-xs text-slate-500">
       Только создатель может приглашать
     </div>
@@ -186,8 +189,17 @@ const getRole = (player) => {
 
 <style scoped>
 @keyframes pulse-online {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(0.9); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
 }
 
 .bg-emerald-400 {

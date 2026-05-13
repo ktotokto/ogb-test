@@ -91,6 +91,8 @@ const openEditor = () => {
   }
   isEditing.value = true
 }
+
+
 </script>
 
 <template>
