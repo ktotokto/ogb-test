@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onUnmounted, watch } from 'vue'
+import { useGameStore } from '@/stores/game'
 
 const isDisplay = ref(true)
 const hoveredCardId = ref(null)
@@ -14,9 +15,9 @@ const resizeStartWidth = ref(0)
 
 const panOffset = ref({ x: 0, y: 0 })
 const lastMousePos = ref({ x: 0, y: 0 })
+const gameStore = useGameStore()
 
 const props = defineProps({
-  objects: Array,
   isShiftPressed: { type: Boolean, default: false }
 })
 
@@ -28,8 +29,9 @@ const toggleHand = () => {
 
 const returnToBoard = (object) => {
   emit('select-card', object)
-  const index = props.objects.indexOf(object)
-  if (index !== -1) { props.objects.splice(index, 1) }
+  const index = gameStore.handCards.indexOf(object)
+  if (index !== -1) { gameStore.handCards.splice(index, 1) }
+  gameStore.debouncedSave()
 }
 
 const startResizeHeight = (e) => {
@@ -126,18 +128,18 @@ onUnmounted(() => {
     <div class="hand-header">
       <div class="flex items-center gap-2">
         <span class="hand-title">Рука</span>
-        <span class="hand-count">{{ objects.length }}</span>
+        <span class="hand-count">{{ gameStore.handCards.length }}</span>
       </div>
     </div>
 
     <div v-if="isDisplay" class="hand-main-section">
-      <div v-if="!objects || objects.length === 0" class="hand-empty">
+      <div v-if="!gameStore.handCards || gameStore.handCards.length === 0" class="hand-empty">
         <span class="hand-empty-text">Рука пуста</span>
       </div>
       <div v-else class="hand-cards-wrapper" :style="{ height: `${handHeight}px` }">
         <div class="hand-cards">
           <div 
-            v-for="object in objects" 
+            v-for="object in gameStore.handCards" 
             :key="object.id" 
             class="hand-card"
             :class="{ 'is-hovered': hoveredCardId === object.id && isShiftPressed }"

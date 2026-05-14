@@ -17,7 +17,7 @@ const isAuthenticated = computed(() => userStore.isAuthenticated)
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <router-link to="/" class="flex items-center gap-2 group">
         <span class="text-xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
-          OGB
+          12 Столов
         </span>
       </router-link>
 

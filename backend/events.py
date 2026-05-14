@@ -820,30 +820,45 @@ def register_events():
         try:
             user = get_current_user()
             if not user: return
+
             session_id = data.get('sessionId')
             deck_id = data.get('deckId')
             card = data.get('card')
-            if not session_id or not deck_id or not card: return
+            deck_state = data.get('deckState')
+
+            if not session_id or not deck_id: return
 
             session = GameSession.query.get(session_id)
-            if session:
-                state = json.loads(session.state) if session.state else {}
+            if session and session.state:
+                state = json.loads(session.state)
+
                 if 'objects' in state:
                     for obj in state['objects']:
-                        if obj.get('id') == deck_id and obj.get('type') == 'deck':
-                            if not obj.get('cards'): obj['cards'] = []
-                            if not any(c.get('id') == card['id'] for c in obj['cards']):
-                                obj['cards'].append(card)
-                                obj['cardCount'] = len(obj['cards'])
+                        if obj.get('id') == deck_id:
+                            if deck_state:
+                                obj['cards'] = deck_state.get('cards', [])
+                                obj['cardCount'] = deck_state.get('cardCount', 0)
+
+                            elif card:
+                                if not obj.get('cards'): obj['cards'] = []
+                                if not any(c.get('id') == card['id'] for c in obj['cards']):
+                                    obj['cards'].append(card)
+                                    obj['cardCount'] = len(obj['cards'])
                             break
+
                 session.state = json.dumps(state)
                 db.session.commit()
 
             emit('deck:addCard', {
-                'deckId': deck_id, 'card': card, 'userId': user.id, 'sessionId': session_id
+                'deckId': deck_id,
+                'card': card,
+                'deckState': deck_state,
+                'userId': user.id,
+                'sessionId': session_id
             }, room=session_id, include_self=False)
+
         except Exception as e:
-            print(f"Deck add card error: {e}")
+            print(f"Deck addCard error: {e}")
 
     @socketio.on('deck:shuffle')
     def handle_deck_shuffle(data):
@@ -877,42 +892,37 @@ def register_events():
         try:
             user = get_current_user()
             if not user: return
+
             session_id = data.get('sessionId')
             deck_id = data.get('deckId')
-            new_card = data.get('newCard')
             deck_state = data.get('deckState')
+
             if not session_id or not deck_id: return
 
             session = GameSession.query.get(session_id)
-            if session:
-                state = json.loads(session.state) if session.state else {}
+            if session and session.state:
+                state = json.loads(session.state)
 
                 if 'objects' in state:
                     for obj in state['objects']:
-                        if obj.get('id') == deck_id:
+                        if obj.get('id') == deck_id and obj.get('type') == 'deck':
                             if deck_state:
                                 obj['cards'] = deck_state.get('cards', [])
                                 obj['cardCount'] = deck_state.get('cardCount', 0)
                             break
 
-                if new_card:
-                    if 'objects' not in state: state['objects'] = []
-                    state['objects'].append(new_card)
-
                 session.state = json.dumps(state)
                 db.session.commit()
 
             emit('deck:draw', {
+                'sessionId': session_id,
                 'deckId': deck_id,
-                'newCard': new_card,
                 'deckState': deck_state,
-                'userId': user.id,
-                'sessionId': session_id
+                'userId': user.id
             }, room=session_id, include_self=False)
+
         except Exception as e:
             print(f"Deck draw error: {e}")
-
-    # === Helper Functions ===
 
     def notify_friends_status(user_id, is_online):
         """Notify all friends about user's online status"""

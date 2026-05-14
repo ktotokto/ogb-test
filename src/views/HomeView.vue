@@ -79,7 +79,7 @@ onMounted(() => {
           <h1 class="text-6xl md:text-7xl font-bold mb-6">
             <span
               class="bg-gradient-to-r from-violet-400 via-cyan-400 to-violet-400 bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient">
-              OGB
+              12 Столов
             </span>
           </h1>
 

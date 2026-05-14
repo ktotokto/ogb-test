@@ -41,7 +41,6 @@ const isDrawing = ref(false)
 const isSelecting = ref(false)
 const selectionStart = ref({ x: 0, y: 0 })
 const selectionEnd = ref({ x: 0, y: 0 })
-const handCards = ref([])
 const isShiftPressed = ref(false)
 
 const {
@@ -66,13 +65,9 @@ const currentUser = computed(() => userStore.currentUser)
 
 const objects = computed(() => gameStore.objects || [])
 const drawings = computed(() => gameStore.drawings || [])
-const objectsHand = ref([])
-
 const cardDeck = ref([])
-
 const editingCard = ref(null)
 
-const zIndex = ref(0)
 
 const objectsWithStackCount = computed(() => {
   const stackCounts = {}
@@ -384,7 +379,7 @@ const handleObjectMove = ({ objectId, position, final }) => {
 
 const handleAddToHand = (objectId) => {
   const obj = gameStore.objects.find(o => o.id === objectId)
-  objectsHand.value.push(obj)
+  gameStore.handCards.push(obj)
 
   gameStore.updateObject(objectId, {
     inHand: true,
@@ -403,19 +398,32 @@ const handleAddToHand = (objectId) => {
     })
   }
   handleObjectDelete(objectId)
+  gameStore.debouncedSave()
 }
 
 const handleDrawFromDeck = (deckId, position) => {
   const drawnCards = gameStore.drawFromDeck(deckId, 1, position)
-  drawnCards.forEach(card => {
-    gameStore.addObject(card)
+
+  if (drawnCards.length > 0) {
+    const newCard = drawnCards[0]
+    const deck = gameStore.decks.find(d => d.id === deckId)
+
     if (socket.value && gameStore.sessionId) {
       socket.value.emit('object:create', {
         sessionId: gameStore.sessionId,
-        object: card
+        object: newCard
+      })
+
+      socket.value.emit('deck:draw', {
+        sessionId: gameStore.sessionId,
+        deckId: deckId,
+        deckState: {
+          cards: deck ? deck.cards : [],
+          cardCount: deck ? deck.cardCount : 0
+        }
       })
     }
-  })
+  }
 }
 
 const handleShuffleDeck = (deckId) => {
@@ -456,7 +464,7 @@ const createDeckOnBoard = (event) => {
     cards: [],
     cardCount: 0
   }
-  gameStore.addDeck({ id: deck.id, name: deck.label, cards: [], cardCount: 0}, { x: world.x - 60, y: world.y - 90 })
+  gameStore.addDeck({ id: deck.id, name: deck.label, cards: [], cardCount: 0 }, { x: world.x - 60, y: world.y - 90 })
   if (socket.value && gameStore.sessionId) {
     socket.value.emit('deck:create', { sessionId: gameStore.sessionId, deck })
   }
@@ -489,12 +497,10 @@ const handleObjectSelect = (object, event) => {
     const index = gameStore.objects.findIndex(obj => obj.id === object.id)
     if (index !== -1) { gameStore.objects.splice(index, 1) }
     gameStore.objects.unshift(object)
-    
-    console.log(gameStore.objects)
-    
+
     selectedObjects.value.clear()
     selectedObjects.value.add(object.id)
-}
+  }
 }
 
 const handleObjectDelete = (objectId) => {
@@ -522,7 +528,7 @@ const handleObjectDelete = (objectId) => {
   }
 }
 
-const handleObjectDuplicate = (object) => {  
+const handleObjectDuplicate = (object) => {
   const newObject = {
     ...object,
     id: `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -590,96 +596,6 @@ const handleCardFlip = (objectId) => {
       })
     }
   }
-}
-
-const enterStackMode = (objectId) => {
-  stackMode.value = true
-  stackSourceId.value = objectId
-  selectedObjects.value.clear()
-  selectedObjects.value.add(objectId)
-}
-
-const handleStackAdd = (targetId, sourceId) => {
-  const target = gameStore.objects.find(o => o.id === targetId)
-  const source = gameStore.objects.find(o => o.id === sourceId)
-  if (!target || !source) return
-
-  const stackId = target.stackId || target.id
-  gameStore.updateObject(targetId, { stackId })
-  gameStore.updateObject(sourceId, { stackId })
-
-  if (socket.value && gameStore.sessionId) {
-    socket.value.emit('object:sync', {
-      sessionId: gameStore.sessionId,
-      userId: userStore.userId,
-      update: {
-        objectId: targetId,
-        changes: { stackId },
-        type: 'stack'
-      }
-    })
-    socket.value.emit('object:sync', {
-      sessionId: gameStore.sessionId,
-      userId: userStore.userId,
-      update: {
-        objectId: sourceId,
-        changes: { stackId },
-        type: 'stack'
-      }
-    })
-  }
-
-  const stackCards = gameStore.objects.filter(o => o.stackId === stackId)
-  stackCards.forEach((card, i) => {
-    gameStore.updateObject(card.id, { stackIndex: i })
-    if (socket.value && gameStore.sessionId) {
-      socket.value.emit('object:sync', {
-        sessionId: gameStore.sessionId,
-        userId: userStore.userId,
-        update: {
-          objectId: card.id,
-          changes: { stackIndex: i },
-          type: 'stack'
-        }
-      })
-    }
-  })
-}
-
-
-const handleStackRemove = (objectId) => {
-  const obj = gameStore.objects.find(o => o.id === objectId)
-  if (!obj || !obj.stackId) return
-
-  gameStore.updateObject(objectId, { stackId: null, stackIndex: 0 })
-
-  if (socket.value && gameStore.sessionId) {
-    socket.value.emit('object:sync', {
-      sessionId: gameStore.sessionId,
-      userId: userStore.userId,
-      update: {
-        objectId,
-        changes: { stackId: null, stackIndex: 0 },
-        type: 'stack'
-      }
-    })
-  }
-
-  const stackCards = gameStore.objects.filter(o => o.stackId === obj.stackId && o.id !== objectId)
-  stackCards.forEach((card, i) => {
-    gameStore.updateObject(card.id, { stackIndex: i })
-    if (socket.value && gameStore.sessionId) {
-      socket.value.emit('object:sync', {
-        sessionId: gameStore.sessionId,
-        userId: userStore.userId,
-        update: {
-          objectId: card.id,
-          changes: { stackIndex: i },
-          type: 'stack'
-        }
-      })
-    }
-  })
 }
 
 const openCardEditor = (card) => {
@@ -846,9 +762,19 @@ onMounted(() => {
       gameStore.updateDeck(data.deck.id, data.deck)
     })
 
-    socket.value?.on('deck:addCard', (data) => {
+    socket.value.on('deck:addCard', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
+
       gameStore.addCardToDeck(data.deckId, data.card)
+      gameStore.removeObject(data.card.id)
+
+      if (data.deckState) {
+        const deck = gameStore.decks.find(d => d.id === data.deckId)
+        if (deck) {
+          deck.cards = data.deckState.cards
+          deck.cardCount = data.deckState.cardCount
+        }
+      }
     })
 
     socket.value?.on('deck:shuffle', (data) => {
@@ -856,9 +782,20 @@ onMounted(() => {
       gameStore.shuffleDeck(data.deckId)
     })
 
-    socket.value?.on('deck:draw', (data) => {
+    socket.value.on('deck:draw', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
-      data.cards?.forEach(c => gameStore.addObject(c))
+
+      const deck = gameStore.decks.find(d => d.id === data.deckId)
+      if (deck && data.deckState) {
+        deck.cards = data.deckState.cards
+        deck.cardCount = data.deckState.cardCount
+      }
+
+      const boardDeck = gameStore.objects.find(o => o.id === data.deckId && o.type === 'deck')
+      if (boardDeck && data.deckState) {
+        boardDeck.cards = data.deckState.cards
+        boardDeck.cardCount = data.deckState.cardCount
+      }
     })
   }
 
@@ -880,7 +817,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <GameHand :objects="objectsHand" :isShiftPressed="isShiftPressed" @return-card="addCardToBoard" @select-card="selectCardToAdd" />
+  <GameHand :isShiftPressed="isShiftPressed" @return-card="addCardToBoard" @select-card="selectCardToAdd" />
   <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
 
@@ -897,13 +834,14 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
-        <GameObject v-for="obj in objectsWithStackCount" :key="obj.id" :object="obj"
+        <GameObject v-for="(obj, index) in objectsWithStackCount" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
-          :is-shift-pressed="isShiftPressed" :board-rotation="boardRotation" @select="handleObjectSelect"
-          @move="handleObjectMove" @delete="handleObjectDelete" @duplicate="handleObjectDuplicate"
-          @rotate="handleObjectRotate" @flip="handleCardFlip" @draw-from-deck="handleDrawFromDeck"
-          @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck" @add-to-hand="handleAddToHand" />
+          :is-shift-pressed="isShiftPressed" :board-rotation="boardRotation" :style="{ zIndex: 999 - index }"
+          @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
+          @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
+          @draw-from-deck="handleDrawFromDeck" @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck"
+          @add-to-hand="handleAddToHand" />
 
       </div>
     </div>

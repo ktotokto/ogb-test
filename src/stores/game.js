@@ -22,6 +22,7 @@ export const useGameStore = defineStore('game', () => {
   const decks = ref([])
   const selectedForHand = ref(new Set())
   const userStore = useUserStore()
+  const handCards = ref([])
 
   const isAdmin = computed(() => {
     return currentPlayer.value?.role === 'creator' || currentPlayer.value?.role === 'admin'
@@ -215,22 +216,20 @@ export const useGameStore = defineStore('game', () => {
   function setSession(sessionData) {
     sessionId.value = sessionData.id
     session.value = sessionData
-
-    if (sessionData.players) {
-      players.value = sessionData.players
-    }
+    if (sessionData.players) players.value = sessionData.players
 
     if (sessionData.state) {
       const state = typeof sessionData.state === 'string'
         ? JSON.parse(sessionData.state)
         : sessionData.state
+
       objects.value = state.objects || []
+      handCards.value = state.handCards || []
       drawings.value = state.drawings || []
-      if (state.settings) {
-        settings.value = { ...settings.value, ...state.settings }
-      }
+      if (state.settings) settings.value = { ...settings.value, ...state.settings }
     }
   }
+
   function addDeck(deckData, position = { x: 50000, y: 50000 }) {
     if (objects.value.find(o => o.id === deckData.id && o.type === 'deck')) return
 
@@ -292,7 +291,7 @@ export const useGameStore = defineStore('game', () => {
     if (!deck || !cardObj) { return false }
     if (!deck.cards) deck.cards = []
     if (deck.cards.some(c => c.id === cardObj.id)) { return false }
-    
+
     deck.cards.push({
       id: cardObj.id,
       label: cardObj.label,
@@ -443,6 +442,7 @@ export const useGameStore = defineStore('game', () => {
     objects.value = []
     drawings.value = []
     chatMessages.value = []
+    handCards.value = []
   }
 
   function addObject(obj) {
@@ -471,17 +471,15 @@ export const useGameStore = defineStore('game', () => {
   let saveTimeout = null
   async function debouncedSave() {
     if (saveTimeout) clearTimeout(saveTimeout)
-
     saveTimeout = setTimeout(async () => {
       if (!sessionId.value) return
-
       try {
         const state = {
           objects: objects.value,
+          handCards: handCards.value,
           drawings: drawings.value,
           settings: settings.value
         }
-
         await axios.post(`/api/game/session/${sessionId.value}/save`, { state })
       } catch (err) {
         console.error('Auto-save failed:', err)
@@ -491,13 +489,13 @@ export const useGameStore = defineStore('game', () => {
 
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
-      if (sessionId.value && objects.value.length > 0) {
+      if (sessionId.value && (objects.value.length > 0 || handCards.value.length > 0)) {
         const state = {
           objects: objects.value,
+          handCards: handCards.value,
           drawings: drawings.value,
           settings: settings.value
         }
-
         navigator.sendBeacon(
           `/api/game/session/${sessionId.value}/save`,
           JSON.stringify({ state })
@@ -536,6 +534,7 @@ export const useGameStore = defineStore('game', () => {
     isAdmin,
     decks,
     selectedForHand,
+    handCards,
     addDeck,
     updateDeck,
     removeDeck,
