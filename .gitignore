@@ -7,3 +7,4 @@ venv
 __pycache__/
 backend/.idea
 .idea
+backend/instance/ogb.db
