@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, toRaw } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
@@ -160,7 +160,7 @@ const openEditor = (typeConfig, existingObject = null) => {
 
 const saveFromEditor = () => {
   if (!editorObject.value) return
-  const obj = { ...editorObject.value }
+  const obj = JSON.parse(JSON.stringify(toRaw(editorObject.value)))
   delete obj.editing
 
   if (obj.editing) {
@@ -173,15 +173,20 @@ const saveFromEditor = () => {
       })
     }
   } else {
+    obj.id = `obj_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    obj.position = { x: 50000, y: 50000 }
+
     if (obj.type === 'deck') {
       gameStore.addDeck({ id: obj.id, name: obj.label, cards: obj.cards || [] }, obj.position)
     } else {
       gameStore.addObject(obj)
     }
+    
     if (socket.value && gameStore.sessionId) {
       socket.value.emit('object:create', { sessionId: gameStore.sessionId, object: obj })
     }
   }
+
   showEditor.value = false
   editorObject.value = null
 }

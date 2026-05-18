@@ -22,11 +22,14 @@ const cardBackImage = ref(null)
 const isUploading = ref(false)
 const uploadedCards = ref([])
 
+// 🆕 Новые переменные для формата карт
+const cardWidth = ref(120)
+const cardHeight = ref(180)
+const cardShape = ref('rounded') // square | rounded | circle
+
 const decks = computed(() => {
   const list = gameStore.decks
-  if (!list) {
-    return []
-  }
+  if (!list) return []
   if (list.length === 0 && gameStore.objects) {
     return gameStore.objects
       .filter(o => o.type === 'deck')
@@ -83,10 +86,7 @@ const handleCardBackUpload = (event) => {
 
   const reader = new FileReader()
   reader.onload = (e) => {
-    cardBackImage.value = {
-      file: file,
-      image: e.target.result
-    }
+    cardBackImage.value = { file, image: e.target.result }
   }
   reader.readAsDataURL(file)
 }
@@ -110,6 +110,10 @@ const startCreateDeck = () => {
   cardImages.value = []
   cardBackImage.value = null
   uploadedCards.value = []
+  // 🆕 Сброс формата к значениям по умолчанию
+  cardWidth.value = 120
+  cardHeight.value = 180
+  cardShape.value = 'rounded'
   isCreating.value = true
 }
 
@@ -117,19 +121,22 @@ const startEditDeck = (deck) => {
   editingDeck.value = { ...deck }
   newDeckName.value = deck.name
   selectedCards.value = deck.cards || []
+  // 🆕 Восстановление формата из сохранённой колоды или дефолты
+  if (deck.cardFormat) {
+    cardWidth.value = deck.cardFormat.width || 120
+    cardHeight.value = deck.cardFormat.height || 180
+    cardShape.value = deck.cardFormat.shape || 'rounded'
+  } else {
+    cardWidth.value = 120
+    cardHeight.value = 180
+    cardShape.value = 'rounded'
+  }
   isCreating.value = true
 }
 
 const createDeckFromImages = async () => {
-  if (!newDeckName.value.trim()) {
-    alert('Введите название колоды!')
-    return
-  }
-
-  if (uploadedCards.value.length === 0) {
-    alert('Загрузите хотя бы одну карту!')
-    return
-  }
+  if (!newDeckName.value.trim()) return alert('Введите название колоды!')
+  if (uploadedCards.value.length === 0) return alert('Загрузите хотя бы одну карту!')
 
   isUploading.value = true
 
@@ -138,8 +145,8 @@ const createDeckFromImages = async () => {
     const centerX = 50000
     const centerY = 50000
     const cardsPerRow = 5
-    const cardWidth = 140
-    const cardHeight = 200
+    const spacingX = cardWidth.value + 20
+    const spacingY = cardHeight.value + 20
 
     for (let i = 0; i < uploadedCards.value.length; i++) {
       const uploadedCard = uploadedCards.value[i]
@@ -151,11 +158,12 @@ const createDeckFromImages = async () => {
         type: 'card',
         label: uploadedCard.label || `Карта ${i + 1}`,
         position: {
-          x: centerX + (col * cardWidth) - ((uploadedCards.value.length > cardsPerRow ? cardsPerRow : uploadedCards.value.length) * cardWidth / 2) + 60,
-          y: centerY + (row * cardHeight) - 200
+          x: centerX + (col * spacingX) - ((Math.min(uploadedCards.value.length, cardsPerRow) * spacingX) / 2) + spacingX / 2,
+          y: centerY + (row * spacingY) - 200
         },
-        width: 120,
-        height: 180,
+        width: cardWidth.value,
+        height: cardHeight.value,
+        shape: cardShape.value, // 🆕 Применяем выбранную форму
         rotation: 0,
         owner: userStore.userId,
         ownerId: userStore.userId,
@@ -176,7 +184,7 @@ const createDeckFromImages = async () => {
         cardData: newCard.cardData
       })
 
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise(resolve => setTimeout(resolve, 30))
     }
 
     const deckData = {
@@ -186,7 +194,12 @@ const createDeckFromImages = async () => {
       cardCount: deckCards.length,
       hasCustomBack: !!cardBackImage.value,
       createdAt: new Date().toISOString(),
-      createdBy: userStore.userId
+      createdBy: userStore.userId,
+      cardFormat: { // 🆕 Сохраняем формат в метаданные колоды
+        width: cardWidth.value,
+        height: cardHeight.value,
+        shape: cardShape.value
+      }
     }
 
     gameStore.addDeck(deckData)
@@ -198,9 +211,13 @@ const createDeckFromImages = async () => {
       })
     }
 
+    // Сброс после успешного создания
     uploadedCards.value = []
     cardBackImage.value = null
     newDeckName.value = ''
+    cardWidth.value = 120
+    cardHeight.value = 180
+    cardShape.value = 'rounded'
     isCreating.value = false
 
     alert(`Создано ${deckCards.length} карт и колода "${deckData.name}"!`)
@@ -223,15 +240,20 @@ const saveDeck = () => {
   const deckData = {
     id: editingDeck.value?.id || `deck_${Date.now()}`,
     name: newDeckName.value.trim(),
-    cards: deckCards.value,
-    cardCount: deckCards.value.length
+    cards: selectedCards.value, // ✅ Исправлена ссылка на несуществующую переменную
+    cardCount: selectedCards.value.length,
+    cardFormat: { // 🆕 Сохраняем текущий формат
+      width: cardWidth.value,
+      height: cardHeight.value,
+      shape: cardShape.value
+    }
   }
 
   if (editingDeck.value) {
     gameStore.updateDeck(deckData.id, deckData)
     socket.value?.emit('deck:update', { sessionId: gameStore.sessionId, deck: deckData })
   } else {
-    gameStore.addDeck(deckData) 
+    gameStore.addDeck(deckData)
     socket.value?.emit('deck:create', { sessionId: gameStore.sessionId, deck: deckData })
   }
 
@@ -245,6 +267,10 @@ const cancelEdit = () => {
   selectedCards.value = []
   uploadedCards.value = []
   cardBackImage.value = null
+  // 🆕 Сброс формата
+  cardWidth.value = 120
+  cardHeight.value = 180
+  cardShape.value = 'rounded'
 }
 
 const deleteDeck = (deckId) => {
@@ -262,7 +288,8 @@ const duplicateDeck = (deck) => {
   const newDeck = {
     ...deck,
     id: `deck_${Date.now()}`,
-    name: `${deck.name} (копия)`
+    name: `${deck.name} (копия)`,
+    cardFormat: deck.cardFormat || { width: 120, height: 180, shape: 'rounded' }
   }
   gameStore.addDeck(newDeck)
   if (socket.value && gameStore.sessionId) {
@@ -289,7 +316,6 @@ const toggleCardSelection = (card) => {
 const removeCardFromDeck = (cardId) => {
   selectedCards.value = selectedCards.value.filter(c => c.id !== cardId)
 }
-
 </script>
 
 <template>
@@ -352,11 +378,53 @@ const removeCardFromDeck = (cardId) => {
     <div class="space-y-4 p-4 bg-slate-800/30 border border-violet-500/30 rounded-lg">
       <h4 class="text-sm font-medium text-violet-300 flex items-center gap-2">
         <Upload class="w-4 h-4" />
-        Создать колоду из изображений
+        Создание из изображений
       </h4>
 
       <input v-model="newDeckName" type="text" placeholder="Название колоды *"
         class="w-full px-4 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500" />
+
+      <!-- 🆕 Блок настройки формата карт -->
+      <div class="p-3 bg-slate-800/40 border border-white/10 rounded-lg space-y-3">
+        <h5 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Формат карт</h5>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-400 mb-1 block">Ширина (px)</label>
+            <input v-model.number="cardWidth" type="number" min="50" max="500"
+              class="w-full px-3 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 mb-1 block">Высота (px)</label>
+            <input v-model.number="cardHeight" type="number" min="50" max="500"
+              class="w-full px-3 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500" />
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 mb-2 block">Форма</label>
+          <div class="flex gap-2">
+            <button v-for="shape in ['square', 'rounded', 'circle']" :key="shape" @click="cardShape = shape" :class="[
+              'flex-1 py-2 text-xs font-medium rounded-lg border transition-all',
+              cardShape === shape
+                ? 'bg-violet-600/80 border-violet-500 text-white shadow-lg shadow-violet-500/20'
+                : 'bg-slate-800/60 border-white/10 text-slate-400 hover:border-violet-500/50'
+            ]">
+              {{ shape === 'square' ? 'Квадрат' : shape === 'rounded' ? 'Скруглённая' : 'Круг' }}
+            </button>
+          </div>
+        </div>
+        <!-- Визуальный превью формы -->
+        <div class="flex justify-center pt-1">
+          <div
+            class="border border-white/20 bg-slate-700/50 flex items-center justify-center text-[10px] text-slate-400"
+            :style="{
+              width: Math.min(cardWidth, 80) + 'px',
+              height: Math.min(cardHeight, 100) + 'px',
+              borderRadius: cardShape === 'circle' ? '50%' : cardShape === 'rounded' ? '8px' : '0px'
+            }">
+            Превью
+          </div>
+        </div>
+      </div>
 
       <div class="space-y-2">
         <label class="text-xs text-slate-400">Рубашка карт (необязательно)</label>
@@ -425,7 +493,7 @@ const removeCardFromDeck = (cardId) => {
 
     <div class="border-t border-white/10 pt-4">
       <p class="text-xs text-slate-500 text-center">
-        Или используйте старый способ редактирования
+        Или используйте ручной выбор карт
       </p>
     </div>
 
@@ -467,11 +535,10 @@ const removeCardFromDeck = (cardId) => {
     </div>
 
     <div class="flex gap-2">
-
-      <button @click="selectDeckToAdd(deck)"
-        class="px-2 py-1.5 bg-violet-600/50 hover:bg-violet-500 text-white rounded text-xs transition-all"
+      <button @click="selectDeckToAdd(editingDeck || { name: newDeckName })"
+        class="px-3 py-2 bg-violet-600/50 hover:bg-violet-500 text-white rounded-lg transition-all"
         title="Создать на поле">
-        <Layers class="w-3 h-3" />
+        <Layers class="w-4 h-4" />
       </button>
       <button @click="saveDeck" :disabled="!newDeckName.trim()"
         class="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm">

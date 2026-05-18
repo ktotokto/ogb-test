@@ -38,7 +38,6 @@ const isExpanded = computed(() => isHovered.value && props.isShiftPressed)
 const isDeck = computed(() => props.object.type === 'deck')
 const deckCardCount = computed(() => props.object.cardCount || props.object.cards?.length || 0)
 const isDragEnabled = computed(() => props.isDraggable && !props.object.locked)
-console.log(isDragEnabled);
 
 const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
   enabled: isDragEnabled,
