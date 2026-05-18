@@ -38,21 +38,24 @@ const router = createRouter({
   routes
 })
 
-// ✅ Router guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   const requiresAuth = to.meta.requiresAuth
 
-  // Если страница требует авторизации
+  if (!userStore.isAuthChecked) {
+    try {
+      await userStore.initAuth()
+    } catch (err) {
+      console.error('Auth init failed:', err)
+    }
+  }
+
   if (requiresAuth && !userStore.isAuthenticated) {
-    // Сохраняем куда хотел попасть пользователь
     next({ name: 'Login', query: { redirect: to.fullPath } })
   }
-  // Если пользователь уже авторизован и идёт на вход — редирект на главную
   else if (!requiresAuth && userStore.isAuthenticated && (to.name === 'Login' || to.name === 'Register')) {
     next({ name: 'Home' })
   }
-  // Во всех остальных случаях — разрешаем
   else {
     next()
   }

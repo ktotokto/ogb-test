@@ -76,7 +76,6 @@ const saveSession = async () => {
         { headers: { 'Authorization': `Bearer ${token}` } }
       )
     } else {
-      // Create new session
       const response = await axios.post(
         '/api/game/session/create',
         {

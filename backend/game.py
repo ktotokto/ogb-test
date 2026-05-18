@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, GameSession, SessionPlayer, User, Friendship, GameInvitation
+from models import db, GameSession, SessionPlayer, User, Friendship, GameInvitation, Template
 import json
 import uuid
 from datetime import datetime
@@ -64,7 +64,6 @@ def create_session():
 @game_bp.route('/session/join', methods=['POST'])
 @jwt_required()
 def join_session():
-    """Присоединение к существующей сессии"""
     try:
         current_user_id = get_jwt_identity()
         data = request.get_json() or {}
@@ -80,14 +79,12 @@ def join_session():
         if session.is_full():
             return jsonify({'error': 'Session is full'}), 409
 
-        # Проверяем есть ли игрок уже в сессии
         existing = SessionPlayer.query.filter_by(
             session_id=session_id,
             user_id=current_user_id
         ).first()
 
         if not existing:
-            # Добавляем как игрока
             session_player = SessionPlayer(
                 session_id=session_id,
                 user_id=current_user_id,
@@ -98,7 +95,6 @@ def join_session():
             db.session.commit()
             print(f"✅ Player {current_user_id} joined session {session_id}")
         else:
-            # Активируем если был неактивен
             existing.is_active = True
             db.session.commit()
             print(f"✅ Player {current_user_id} reactivated in session {session_id}")
@@ -117,11 +113,8 @@ def join_session():
 @game_bp.route('/sessions', methods=['GET'])
 @jwt_required()
 def get_user_sessions():
-    """Получить список игр текущего пользователя"""
     try:
         current_user_id = get_jwt_identity()
-
-        # Найти все сессии где пользователь является игроком
         session_players = SessionPlayer.query.filter_by(
             user_id=current_user_id,
             is_active=True
@@ -133,9 +126,7 @@ def get_user_sessions():
             if session:
                 sessions.append(session.to_dict())
 
-        return jsonify({
-            'sessions': sessions
-        }), 200
+        return jsonify({'sessions': sessions}), 200
 
     except Exception as e:
         print(f"❌ Get sessions error: {e}")
@@ -148,12 +139,10 @@ def get_session(session_id):
     """Получение информации о сессии"""
     try:
         current_user_id = get_jwt_identity()
-
         session = GameSession.query.get(session_id)
         if not session:
             return jsonify({'error': 'Session not found'}), 404
 
-        # Проверка что пользователь в сессии
         player = SessionPlayer.query.filter_by(
             session_id=session_id,
             user_id=current_user_id
@@ -162,9 +151,7 @@ def get_session(session_id):
         if not player and session.creator_id != current_user_id:
             return jsonify({'error': 'Access denied'}), 403
 
-        return jsonify({
-            'session': session.to_dict()
-        }), 200
+        return jsonify({'session': session.to_dict()}), 200
 
     except Exception as e:
         print(f"❌ Get session error: {e}")
@@ -188,11 +175,9 @@ def invite_to_session():
         if not session:
             return jsonify({'error': 'Session not found'}), 404
 
-        # Только создатель может приглашать
         if session.creator_id != current_user_id:
             return jsonify({'error': 'Only creator can invite'}), 403
 
-        # Проверка что приглашаемый — друг
         is_friend = Friendship.query.filter(
             ((Friendship.requester_id == current_user_id) & (Friendship.accepter_id == receiver_id)) |
             ((Friendship.requester_id == receiver_id) & (Friendship.accepter_id == current_user_id)),
@@ -202,7 +187,6 @@ def invite_to_session():
         if not is_friend:
             return jsonify({'error': 'Can only invite friends'}), 400
 
-        # Проверка что ещё не в сессии
         existing = SessionPlayer.query.filter_by(
             session_id=session_id,
             user_id=receiver_id,
@@ -212,7 +196,6 @@ def invite_to_session():
         if existing:
             return jsonify({'error': 'User already in session'}), 409
 
-        # Создаём приглашение
         invitation = GameInvitation(
             session_id=session_id,
             sender_id=current_user_id,
@@ -222,7 +205,6 @@ def invite_to_session():
         db.session.add(invitation)
         db.session.commit()
 
-        # Отправляем WebSocket уведомление
         from events import socketio
         receiver = User.query.get(receiver_id)
         if receiver and receiver.is_online:
@@ -235,10 +217,7 @@ def invite_to_session():
 
         print(f"✅ Invitation sent to {receiver_id} for session {session_id}")
 
-        return jsonify({
-            'message': 'Invitation sent',
-            'invitation': invitation.to_dict()
-        }), 201
+        return jsonify({'message': 'Invitation sent', 'invitation': invitation.to_dict()}), 201
 
     except Exception as e:
         print(f"❌ Invite error: {e}")
@@ -248,10 +227,8 @@ def invite_to_session():
 @game_bp.route('/session/<session_id>/leave', methods=['POST'])
 @jwt_required()
 def leave_session(session_id):
-    """Покинуть сессию"""
     try:
         current_user_id = get_jwt_identity()
-
         player = SessionPlayer.query.filter_by(
             session_id=session_id,
             user_id=current_user_id
@@ -262,9 +239,7 @@ def leave_session(session_id):
             db.session.commit()
             print(f"✅ Player {current_user_id} left session {session_id}")
 
-        return jsonify({
-            'message': 'Left session'
-        }), 200
+        return jsonify({'message': 'Left session'}), 200
 
     except Exception as e:
         print(f"Leave session error: {e}")
@@ -307,35 +282,25 @@ def save_session_state(session_id):
 @game_bp.route('/sessions', methods=['GET'])
 @jwt_required()
 def get_sessions():
-    """Получить все сессии пользователя"""
     try:
         current_user_id = get_jwt_identity()
-
-        # Найти все сессии где пользователь является игроком
         session_players = SessionPlayer.query.filter_by(
             user_id=current_user_id,
             is_active=True
         ).all()
-
         session_ids = [sp.session_id for sp in session_players]
 
-        # Добавить сессии которые создал пользователь
         created_sessions = GameSession.query.filter_by(
             creator_id=current_user_id
         ).all()
-
         created_ids = [s.id for s in created_sessions]
 
-        # Объединить и убрать дубликаты
         all_session_ids = list(set(session_ids + created_ids))
-
         sessions = GameSession.query.filter(
             GameSession.id.in_(all_session_ids)
         ).all()
 
-        return jsonify({
-            'sessions': [s.to_dict() for s in sessions]
-        }), 200
+        return jsonify({'sessions': [s.to_dict() for s in sessions]}), 200
     except Exception as e:
         print(f"Get sessions error: {e}")
         return jsonify({'error': 'Failed to fetch sessions', 'details': str(e)}), 500
@@ -360,7 +325,6 @@ def update_session_metadata(session_id):
             session.name = data['name']
         if 'max_players' in data:
             session.max_players = data['max_players']
-
         if 'is_private' in data:
             session.is_private = data['is_private']
 
@@ -387,7 +351,6 @@ def delete_session_endpoint(session_id):
             return jsonify({'error': 'Only creator can delete session'}), 403
 
         SessionPlayer.query.filter_by(session_id=session_id).delete()
-
         db.session.delete(session)
         db.session.commit()
 
@@ -400,3 +363,74 @@ def delete_session_endpoint(session_id):
         import traceback
         traceback.print_exc()
         return jsonify({'error': 'Failed to delete session', 'details': str(e)}), 500
+
+@game_bp.route('/templates', methods=['POST'])
+@jwt_required()
+def save_template():
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json() or {}
+
+        if not data.get('name') or not data.get('state'):
+            return jsonify({'error': 'Name and state are required'}), 400
+
+        new_template = Template(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            name=data['name'],
+            description=data.get('description', ''),
+            state=json.dumps(data['state'], ensure_ascii=False)
+        )
+
+        db.session.add(new_template)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Template saved',
+            'template': new_template.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Save template error: {e}")
+        return jsonify({'error': 'Failed to save template', 'details': str(e)}), 500
+
+
+@game_bp.route('/templates', methods=['GET'])
+@jwt_required()
+def get_templates():
+    try:
+        user_id = get_jwt_identity()
+        templates = Template.query.filter_by(user_id=user_id).order_by(Template.created_at.desc()).all()
+
+        return jsonify({
+            'success': True,
+            'templates': [t.to_dict() for t in templates]
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Get templates error: {e}")
+        return jsonify({'error': 'Failed to fetch templates', 'details': str(e)}), 500
+
+
+@game_bp.route('/templates/<template_id>', methods=['DELETE'])
+@jwt_required()
+def delete_template(template_id):
+    try:
+        user_id = get_jwt_identity()
+
+        template = Template.query.filter_by(id=template_id, user_id=user_id).first()
+
+        if not template:
+            return jsonify({'error': 'Template not found or access denied'}), 404
+
+        db.session.delete(template)
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Template deleted'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Delete template error: {e}")
+        return jsonify({'error': 'Failed to delete template', 'details': str(e)}), 500

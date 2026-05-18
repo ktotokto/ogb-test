@@ -152,10 +152,6 @@ const startDrawing = (event) => {
   redrawCanvas()
 }
 
-const rotateBoard = (degrees) => {
-  boardRotation.value = (boardRotation.value + degrees) % 360
-}
-
 const draw = (event) => {
   if (!isDrawing.value || currentTool.value !== 'draw' || !drawCanvasRef.value) return
   event.preventDefault()
@@ -288,40 +284,6 @@ const addCardToBoard = (card, event) => {
   showCardPanel.value = false
   currentTool.value = 'select'
 }
-
-const handleAddObjectToBoard = (obj) => {
-  const world = getWorldPos({ clientX: window.innerWidth/2, clientY: window.innerHeight/2 })
-  obj.position = { x: world.x - (obj.width||100)/2, y: world.y - (obj.height||100)/2 }
-
-  if (obj.type === 'deck') {
-    gameStore.addDeck({ id: obj.id, name: obj.label, cards: obj.cards||[] }, obj.position)
-  } else {
-    gameStore.addObject(obj)
-  }
-  
-  if (socket.value && gameStore.sessionId) {
-    socket.value.emit('object:create', { sessionId: gameStore.sessionId, object: obj })
-  }
-}
-
-const handleUpdateObject = (objectId, updates) => {
-  gameStore.updateObject(objectId, updates)
-  if (socket.value && gameStore.sessionId) {
-    socket.value.emit('object:sync', {
-      sessionId: gameStore.sessionId,
-      userId: userStore.userId,
-      update: { objectId, changes: updates, type: 'editor-update' }
-    })
-  }
-}
-
-const handleDeleteObject = (objectId) => {
-  gameStore.removeObject(objectId)
-  if (socket.value && gameStore.sessionId) {
-    socket.value.emit('object:delete', { sessionId: gameStore.sessionId, objectId })
-  }
-}
-
 
 const handleBoardMouseDown = (event) => {
   if (event.target.closest('.game-object')) return

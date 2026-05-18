@@ -160,3 +160,29 @@ class CardDeck(db.Model):
             'is_public': self.is_public,
             'created_at': self.created_at.isoformat()
         }
+
+
+class Template(db.Model):
+    __tablename__ = 'templates'
+
+    id = db.Column(db.String(36), primary_key=True)  # UUID
+    user_id = db.Column(db.String(36), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+
+    # Состояние поля хранится как JSON
+    state = db.Column(db.Text, nullable=False)  # JSON-строка
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """Сериализация для API"""
+        return {
+            'id': self.id,
+            'userId': self.user_id,
+            'name': self.name,
+            'description': self.description,
+            'state': json.loads(self.state) if isinstance(self.state, str) else self.state,
+            'createdAt': self.created_at.isoformat() if self.created_at else None
+        }
