@@ -45,7 +45,6 @@ const handleClose = () => {
 
       <div class="relative w-[520px] bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
         @click.stop>
-        <!-- Header -->
         <div class="flex items-center justify-between p-5 border-b border-white/10">
           <h2 class="text-lg font-bold text-white">Редактор карты</h2>
           <button @click="handleClose" class="text-slate-400 hover:text-white transition-colors">
@@ -53,9 +52,7 @@ const handleClose = () => {
           </button>
         </div>
 
-        <!-- Body -->
         <div class="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
-          <!-- Card Name -->
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Название карты</label>
             <input v-model="editedCard.name" type="text"
@@ -90,7 +87,6 @@ const handleClose = () => {
               </div>
             </div>
 
-            <!-- Back Image -->
             <div>
               <label class="block text-sm font-medium text-slate-300 mb-2">Оборотная сторона</label>
               <div
@@ -119,7 +115,6 @@ const handleClose = () => {
             </div>
           </div>
 
-          <!-- Preview -->
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Предпросмотр</label>
             <div class="flex gap-4 justify-center">
@@ -146,7 +141,6 @@ const handleClose = () => {
           </div>
         </div>
 
-        <!-- Footer -->
         <div class="flex gap-3 p-5 border-t border-white/10 bg-slate-800/50">
           <button @click="handleClose"
             class="flex-1 py-2.5 px-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium transition-colors">

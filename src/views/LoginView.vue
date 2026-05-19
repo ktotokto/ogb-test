@@ -28,15 +28,12 @@ const goToRegister = () => router.push('/register')
 
 <template>
   <div class="min-h-screen bg-slate-950 flex items-center justify-center px-4 relative overflow-hidden">
-    <!-- Animated background -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
       <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse"></div>
       <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
     </div>
 
-    <!-- Login Card -->
     <div class="relative z-10 w-full max-w-md">
-      <!-- Logo -->
       <div class="text-center mb-8">
         <div class="inline-flex items-center gap-2 mb-4">
           <Gamepad2 class="w-10 h-10 text-violet-400" />
@@ -48,9 +45,7 @@ const goToRegister = () => router.push('/register')
         <p class="text-slate-400">Добро пожаловать обратно!</p>
       </div>
 
-      <!-- Form Card -->
       <div class="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/10 p-8 shadow-2xl shadow-violet-500/10">
-        <!-- Error Message -->
         <div v-if="userStore.error" class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
           <span class="text-red-400 text-sm flex-1">{{ userStore.error }}</span>
           <button @click="userStore.error = null" class="text-red-400 hover:text-red-300 transition-colors">
@@ -60,9 +55,7 @@ const goToRegister = () => router.push('/register')
           </button>
         </div>
 
-        <!-- Form -->
         <form @submit.prevent="handleLogin" class="space-y-5">
-          <!-- Username Input -->
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">
               Имя пользователя
@@ -83,7 +76,6 @@ const goToRegister = () => router.push('/register')
             </div>
           </div>
 
-          <!-- Password Input -->
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">
               Пароль
@@ -117,7 +109,6 @@ const goToRegister = () => router.push('/register')
             </div>
           </div>
 
-          <!-- Remember & Forgot -->
           <div class="flex items-center justify-between text-sm">
             <label class="flex items-center gap-2 text-slate-400 cursor-pointer">
               <input type="checkbox" class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-violet-500/20" />
@@ -128,7 +119,6 @@ const goToRegister = () => router.push('/register')
             </a>
           </div>
 
-          <!-- Submit Button -->
           <button
             type="submit"
             :disabled="isSubmitting"
@@ -142,7 +132,6 @@ const goToRegister = () => router.push('/register')
           </button>
         </form>
 
-        <!-- Divider -->
         <div class="relative my-6">
           <div class="absolute inset-0 flex items-center">
             <div class="w-full border-t border-white/10"></div>
@@ -152,7 +141,6 @@ const goToRegister = () => router.push('/register')
           </div>
         </div>
 
-        <!-- Register Link -->
         <div class="text-center">
           <p class="text-slate-400 text-sm">
             Нет аккаунта?
@@ -163,7 +151,6 @@ const goToRegister = () => router.push('/register')
         </div>
       </div>
 
-      <!-- Footer -->
       <p class="text-center text-slate-500 text-xs mt-6">
         Нажимая "Войти", вы соглашаетесь с условиями использования
       </p>
@@ -181,7 +168,6 @@ const goToRegister = () => router.push('/register')
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Custom scrollbar for inputs */
 input::-webkit-scrollbar {
   width: 6px;
 }
@@ -199,7 +185,6 @@ input::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.7);
 }
 
-/* Focus animation */
 input:focus {
   animation: focusPulse 0.3s ease;
 }
@@ -210,7 +195,6 @@ input:focus {
   100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
 }
 
-/* Button hover glow */
 button[type="submit"]:hover {
   box-shadow: 0 0 30px rgba(139, 92, 246, 0.4), 0 0 60px rgba(6, 182, 212, 0.2);
 }

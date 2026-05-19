@@ -46,7 +46,7 @@ onMounted(async () => {
       await new Promise(resolve => setTimeout(resolve, 1000))
       
     } catch (e) {
-      console.error('❌ Failed to join session:', e)
+      console.error('Failed to join session:', e)
     }
   }
   

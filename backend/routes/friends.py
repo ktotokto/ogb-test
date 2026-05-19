@@ -60,7 +60,6 @@ def send_friend_request():
     if receiver_id == user_id:
         return jsonify({'message': 'Cannot add yourself'}), 400
     
-    # Check if already friends or request pending
     existing = Friendship.query.filter(
         ((Friendship.requester_id == user_id) & (Friendship.accepter_id == receiver_id)) |
         ((Friendship.requester_id == receiver_id) & (Friendship.accepter_id == user_id))

@@ -34,7 +34,6 @@ export function useGameWebSocket() {
         isConnectedInstance.value = false
       })
 
-      // === Session Events ===
       socketInstance.value.on('session:joined', (data) => {
         gameStore.setSession(data.session)
         if (data.players) {
@@ -133,17 +132,14 @@ export function useGameWebSocket() {
       }
     })
 
-    // Auto-connect if token exists
     if (userStore.token) {
       connect(userStore.token)
     }
 
-    // ✅ Сохраняем методы в socketInstance для доступа из return
     socketInstance._connect = connect
     socketInstance._disconnect = disconnect
   }
 
-  // === Methods — ВСЕГДА доступны ===
   const createSession = (options = {}) => {
     if (!socketInstance.value) return
     socketInstance.value.emit('session:create', {

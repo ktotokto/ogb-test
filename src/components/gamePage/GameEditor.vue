@@ -1,17 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useGameStore } from '@/stores/game'
-import { useUserStore } from '@/stores/user'
-import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { Layers, Square, Gamepad2, Trees } from 'lucide-vue-next'
 import DeckEditor from './editor/DeckEditor.vue'
 import ObjectEditor from './editor/ObjectEditor.vue'
 import TemplateEditor from './editor/TemplateEditor.vue'
 import EnvironmentEditor from './editor/EnvironmentEditor.vue'
-
-const gameStore = useGameStore()
-const userStore = useUserStore()
-const { socket } = useGameWebSocket()
 
 const isOpen = ref(false)
 const activeTab = ref('decks')

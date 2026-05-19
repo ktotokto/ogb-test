@@ -22,10 +22,9 @@ const cardBackImage = ref(null)
 const isUploading = ref(false)
 const uploadedCards = ref([])
 
-// 🆕 Новые переменные для формата карт
 const cardWidth = ref(120)
 const cardHeight = ref(180)
-const cardShape = ref('rounded') // square | rounded | circle
+const cardShape = ref('rounded') 
 
 const decks = computed(() => {
   const list = gameStore.decks
@@ -110,7 +109,6 @@ const startCreateDeck = () => {
   cardImages.value = []
   cardBackImage.value = null
   uploadedCards.value = []
-  // 🆕 Сброс формата к значениям по умолчанию
   cardWidth.value = 120
   cardHeight.value = 180
   cardShape.value = 'rounded'
@@ -121,7 +119,6 @@ const startEditDeck = (deck) => {
   editingDeck.value = { ...deck }
   newDeckName.value = deck.name
   selectedCards.value = deck.cards || []
-  // 🆕 Восстановление формата из сохранённой колоды или дефолты
   if (deck.cardFormat) {
     cardWidth.value = deck.cardFormat.width || 120
     cardHeight.value = deck.cardFormat.height || 180
@@ -163,7 +160,7 @@ const createDeckFromImages = async () => {
         },
         width: cardWidth.value,
         height: cardHeight.value,
-        shape: cardShape.value, // 🆕 Применяем выбранную форму
+        shape: cardShape.value,
         rotation: 0,
         owner: userStore.userId,
         ownerId: userStore.userId,
@@ -195,7 +192,7 @@ const createDeckFromImages = async () => {
       hasCustomBack: !!cardBackImage.value,
       createdAt: new Date().toISOString(),
       createdBy: userStore.userId,
-      cardFormat: { // 🆕 Сохраняем формат в метаданные колоды
+      cardFormat: { 
         width: cardWidth.value,
         height: cardHeight.value,
         shape: cardShape.value
@@ -211,7 +208,6 @@ const createDeckFromImages = async () => {
       })
     }
 
-    // Сброс после успешного создания
     uploadedCards.value = []
     cardBackImage.value = null
     newDeckName.value = ''
@@ -240,9 +236,9 @@ const saveDeck = () => {
   const deckData = {
     id: editingDeck.value?.id || `deck_${Date.now()}`,
     name: newDeckName.value.trim(),
-    cards: selectedCards.value, // ✅ Исправлена ссылка на несуществующую переменную
+    cards: selectedCards.value,
     cardCount: selectedCards.value.length,
-    cardFormat: { // 🆕 Сохраняем текущий формат
+    cardFormat: {
       width: cardWidth.value,
       height: cardHeight.value,
       shape: cardShape.value
@@ -267,7 +263,6 @@ const cancelEdit = () => {
   selectedCards.value = []
   uploadedCards.value = []
   cardBackImage.value = null
-  // 🆕 Сброс формата
   cardWidth.value = 120
   cardHeight.value = 180
   cardShape.value = 'rounded'
@@ -384,7 +379,6 @@ const removeCardFromDeck = (cardId) => {
       <input v-model="newDeckName" type="text" placeholder="Название колоды *"
         class="w-full px-4 py-2 bg-slate-800/60 border border-white/10 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:border-violet-500" />
 
-      <!-- 🆕 Блок настройки формата карт -->
       <div class="p-3 bg-slate-800/40 border border-white/10 rounded-lg space-y-3">
         <h5 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Формат карт</h5>
         <div class="grid grid-cols-2 gap-3">
@@ -412,7 +406,6 @@ const removeCardFromDeck = (cardId) => {
             </button>
           </div>
         </div>
-        <!-- Визуальный превью формы -->
         <div class="flex justify-center pt-1">
           <div
             class="border border-white/20 bg-slate-700/50 flex items-center justify-center text-[10px] text-slate-400"

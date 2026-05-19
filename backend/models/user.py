@@ -14,7 +14,6 @@ class User(db.Model):
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationships
     friends_sent = db.relationship('Friendship', 
                                   foreign_keys='Friendship.requester_id', 
                                   backref='requester', lazy='dynamic')
@@ -60,7 +59,7 @@ class GameInvitation(db.Model):
     session_id = db.Column(db.String(36), db.ForeignKey('game_sessions.id'), nullable=False)
     sender_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     receiver_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
-    status = db.Column(db.String(20), default='pending')  # pending, accepted, declined
+    status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):

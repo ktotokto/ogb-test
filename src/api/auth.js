@@ -7,7 +7,6 @@ const api = axios.create({
   }
 })
 
-// Add token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -42,7 +41,6 @@ export const authApi = {
     return response.data
   },
 
-  // Friends API
   async getFriends() {
     const response = await api.get('/friends')
     return response.data

@@ -121,14 +121,12 @@ const joinSession = async (session) => {
   try {
     const token = userStore.token
 
-    // Join via API
     await axios.post(
       '/api/game/session/join',
       { sessionId: session.id },
       { headers: { 'Authorization': `Bearer ${token}` } }
     )
 
-    // Navigate to game
     router.push(`/game/${session.id}`)
   } catch (err) {
     console.error('Failed to join session:', err)

@@ -15,7 +15,6 @@ class GameSession(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
     players = db.relationship('SessionPlayer', backref='session', lazy='dynamic', cascade='all, delete-orphan')
     invitations = db.relationship('GameInvitation', backref='session', lazy='dynamic', cascade='all, delete-orphan')
     
@@ -45,11 +44,10 @@ class SessionPlayer(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = db.Column(db.String(36), db.ForeignKey('game_sessions.id'), nullable=False)
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
-    role = db.Column(db.String(20), default='player')  # creator, admin, player
+    role = db.Column(db.String(20), default='player') 
     is_active = db.Column(db.Boolean, default=True)
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Unique constraint
     __table_args__ = (db.UniqueConstraint('session_id', 'user_id', name='_session_user_uc'),)
     
     def to_dict(self):

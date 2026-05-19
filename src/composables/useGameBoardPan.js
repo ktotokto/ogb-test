@@ -2,7 +2,7 @@ import interact from 'interactjs'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 export function useGameBoardPan(boardRef, tool, options = {}) {
-    const { enabled = true, onZoomChange, onPanChange } = options  // ← Добавить onPanChange
+    const { enabled = true, onZoomChange, onPanChange } = options
 
     const isPanning = ref(false)
     const panOffset = ref({ x: 0, y: 0 })
@@ -15,7 +15,6 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
             boardRef.value.style.transformOrigin = '0 0'
         }
         
-        // ← Вызвать callback при изменении панорамы
         if (onPanChange) {
             onPanChange({ panOffset: { ...panOffset.value }, zoom: zoom.value })
         }
