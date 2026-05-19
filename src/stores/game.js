@@ -15,7 +15,8 @@ export const useGameStore = defineStore('game', () => {
   const settings = ref({
     gridEnabled: true,
     gridSize: 50,
-    snapToGrid: false
+    snapToGrid: false,
+    backgroundColor: '#0f172a'
   })
   const isLoading = ref(false)
   const error = ref(null)

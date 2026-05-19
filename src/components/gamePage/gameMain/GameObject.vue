@@ -213,19 +213,11 @@ const handleDuplicate = () => {
 
 const handleRotate = () => {
   const newRotation = ((props.object.rotation || 0) + 90) % 360
-  emit('rotate', { objectId: props.object.id, rotation: newRotation })
-
-  if (socket?.value && gameStore.sessionId) {
-    socket.value.emit('object:sync', {
-      sessionId: gameStore.sessionId,
-      userId: userStore.userId,
-      update: {
-        objectId: props.object.id,
-        changes: { rotation: newRotation },
-        type: 'rotate'
-      }
-    })
-  }
+  
+  emit('rotate', { 
+    objectId: props.object.id, 
+    rotation: newRotation 
+  })
 }
 
 const handleFlip = () => {

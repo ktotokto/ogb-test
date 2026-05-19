@@ -11,8 +11,6 @@ import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import GameHand from '../GameHand.vue'
 import { Layers } from 'lucide-vue-next'
 
-
-
 defineOptions({
   inheritAttrs: false
 })
@@ -23,13 +21,10 @@ const userStore = useUserStore()
 const { socket, isConnected, createObject, updateObject, deleteObject, createDrawing, emitObjectSync } = useGameWebSocket()
 const { otherCursors, sendCursorMove, sendCursorLeave } = usePlayerCursors(socket, gameStore)
 
-
 const boardRef = ref(null)
 const boardContainerRef = ref(null)
 const drawCanvasRef = ref(null)
 const selectedObjects = ref(new Set())
-const showGrid = ref(true)
-const gridSize = ref(50)
 const stackMode = ref(false)
 const stackSourceId = ref(null)
 const boardRotation = ref(0)
@@ -53,21 +48,30 @@ const {
   setZoom
 } = useGameBoardPan(boardRef, currentTool, {
   enabled: true,
-  onZoomChange: () => {
-    redrawCanvas()
-  },
-  onPanChange: () => {
-    redrawCanvas()
-  }
+  onZoomChange: () => { redrawCanvas() },
+  onPanChange: () => { redrawCanvas() }
+})
+
+const showGrid = computed({
+  get: () => gameStore.settings.gridEnabled,
+  set: (value) => gameStore.updateSetting('gridEnabled', value)
+})
+
+const gridSize = computed({
+  get: () => gameStore.settings.gridSize,
+  set: (value) => gameStore.updateSetting('gridSize', value)
+})
+
+const backgroundColor = computed({
+  get: () => gameStore.settings.backgroundColor,
+  set: (value) => gameStore.updateSetting('backgroundColor', value)
 })
 
 const currentUser = computed(() => userStore.currentUser)
-
 const objects = computed(() => gameStore.objects || [])
 const drawings = computed(() => gameStore.drawings || [])
 const cardDeck = ref([])
 const editingCard = ref(null)
-
 
 const objectsWithStackCount = computed(() => {
   const stackCounts = {}
@@ -190,7 +194,6 @@ const checkDeckOverlap = (pos, excludeId) => {
   }
   return null
 }
-
 
 const eraseAtWorldPos = (worldX, worldY) => {
   if (currentTool.value !== 'erase') return
@@ -540,36 +543,17 @@ const handleObjectDuplicate = (object) => {
 }
 
 const handleObjectRotate = ({ objectId, rotation }) => {
-  if (objectId) {
-    gameStore.updateObject(objectId, { rotation })
-    if (socket.value && gameStore.sessionId) {
-      socket.value.emit('object:sync', {
-        sessionId: gameStore.sessionId,
-        userId: userStore.userId,
-        update: {
-          objectId,
-          changes: { rotation },
-          type: 'rotate'
-        }
-      })
-    }
-  } else {
-    selectedObjects.value.forEach(id => {
-      const obj = gameStore.objects.find(o => o.id === id)
-      if (obj) {
-        const newRotation = (obj.rotation || 0) + 90
-        gameStore.updateObject(id, { rotation: newRotation })
-        if (socket.value && gameStore.sessionId) {
-          socket.value.emit('object:sync', {
-            sessionId: gameStore.sessionId,
-            userId: userStore.userId,
-            update: {
-              objectId: id,
-              changes: { rotation: newRotation },
-              type: 'rotate'
-            }
-          })
-        }
+  if (!objectId) return
+  gameStore.updateObject(objectId, { rotation })
+  
+  if (socket.value && gameStore.sessionId) {
+    socket.value.emit('object:sync', {
+      sessionId: gameStore.sessionId,
+      userId: userStore.userId,
+      update: {
+        objectId,
+        changes: { rotation },
+        type: 'rotate'
       }
     })
   }
@@ -704,7 +688,6 @@ const handleKeyUp = (event) => {
   }
 }
 
-
 const setTool = (tool) => {
   currentTool.value = tool
   if (tool !== 'addCard') {
@@ -737,14 +720,8 @@ onMounted(() => {
 
   if (socket.value) {
     socket.value.on('object:sync', (data) => {
-      if (data.sessionId !== gameStore.sessionId) {
-        return
-      }
-
-      if (data.userId === userStore.userId) {
-        return
-      }
-
+      if (data.sessionId !== gameStore.sessionId) return
+      if (data.userId === userStore.userId) return
       const { objectId, changes } = data.update
       gameStore.updateObject(objectId, changes)
     })
@@ -752,18 +729,14 @@ onMounted(() => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
       gameStore.addDeck(data.deck, data.deck.position)
     })
-
     socket.value?.on('deck:update', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
       gameStore.updateDeck(data.deck.id, data.deck)
     })
-
     socket.value.on('deck:addCard', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
-
       gameStore.addCardToDeck(data.deckId, data.card)
       gameStore.removeObject(data.card.id)
-
       if (data.deckState) {
         const deck = gameStore.decks.find(d => d.id === data.deckId)
         if (deck) {
@@ -772,21 +745,17 @@ onMounted(() => {
         }
       }
     })
-
     socket.value?.on('deck:shuffle', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
       gameStore.shuffleDeck(data.deckId)
     })
-
     socket.value.on('deck:draw', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
-
       const deck = gameStore.decks.find(d => d.id === data.deckId)
       if (deck && data.deckState) {
         deck.cards = data.deckState.cards
         deck.cardCount = data.deckState.cardCount
       }
-
       const boardDeck = gameStore.objects.find(o => o.id === data.deckId && o.type === 'deck')
       if (boardDeck && data.deckState) {
         boardDeck.cards = data.deckState.cards
@@ -806,7 +775,7 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', handleBoardMouseUp)
   window.removeEventListener('mousemove', handleBoardMouseMove)
   window.removeEventListener('keydown', handleKeyDown)
-  window.addEventListener('keyup', handleKeyUp)
+  window.removeEventListener('keyup', handleKeyUp)
   window.removeEventListener('resize', handleResize)
   sendCursorLeave()
 })
@@ -814,7 +783,13 @@ onUnmounted(() => {
 
 <template>
   <GameHand :isShiftPressed="isShiftPressed" @return-card="addCardToBoard" @select-card="selectCardToAdd" />
-  <div class="w-full h-full relative bg-slate-950 overflow-hidden" :style="{ cursor: cursorStyle }">
+
+  <!-- ✅ Фон теперь реактивно привязан к backgroundColor из стора -->
+  <div class="w-full h-full relative overflow-hidden" :style="{
+    cursor: cursorStyle,
+    backgroundColor: backgroundColor
+  }">
+
     <canvas ref="drawCanvasRef" class="draw-canvas absolute inset-0 pointer-events-none" style="z-index: 10;" />
 
     <CursorMarker v-for="(cursor, userId) in otherCursors" :key="userId" :x="cursor.x" :y="cursor.y"
@@ -830,18 +805,17 @@ onUnmounted(() => {
           height: Math.abs(selectionEnd.y - selectionStart.y) + 'px',
           zIndex: 5
         }" />
+
         <GameObject v-for="(obj, index) in objectsWithStackCount" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
-          :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="gridSize" :snap-to-grid="false"
+          :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="Number(gridSize)" :snap-to-grid="false"
           :is-shift-pressed="isShiftPressed" :board-rotation="boardRotation" :style="{ zIndex: 999 - index }"
           @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
           @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
           @draw-from-deck="handleDrawFromDeck" @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck"
           @add-to-hand="handleAddToHand" />
-
       </div>
     </div>
-
 
     <div class="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 toolbar z-50">
       <button @click="setTool('select')" :class="[
@@ -855,7 +829,6 @@ onUnmounted(() => {
             d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
         </svg>
       </button>
-
       <button @click="setTool('pan')" :class="[
         'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg border',
         currentTool === 'pan'
@@ -867,7 +840,6 @@ onUnmounted(() => {
             d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
         </svg>
       </button>
-
       <button @click="setTool('draw')" :class="[
         'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg border',
         currentTool === 'draw'
@@ -879,7 +851,6 @@ onUnmounted(() => {
             d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
         </svg>
       </button>
-
       <button @click="setTool('erase')" :class="[
         'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg border',
         currentTool === 'erase'
@@ -891,14 +862,12 @@ onUnmounted(() => {
             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
       </button>
-
       <button @click="setTool('addDeck')" :class="[
         'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg border border-white/10',
         currentTool === 'addDeck' ? 'bg-violet-600 text-white' : 'bg-slate-800/60 hover:bg-slate-700 text-white',
       ]" title="Создать колоду">
         <Layers class="w-5 h-5" />
       </button>
-
       <button @click="showCardPanel = !showCardPanel" :class="[
         'w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg border',
         currentTool === 'addCard'
@@ -911,6 +880,7 @@ onUnmounted(() => {
       </button>
     </div>
 
+    <!-- Остальные панели без изменений -->
     <div v-if="showCardPanel"
       class="absolute left-24 top-1/2 -translate-y-1/2 w-72 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
       <div class="flex items-center justify-between mb-4">
@@ -921,7 +891,6 @@ onUnmounted(() => {
           </svg>
         </button>
       </div>
-
       <div class="space-y-2">
         <div v-for="card in cardDeck" :key="card.id" class="flex gap-2">
           <button @click="selectCardToAdd(card)"
@@ -945,7 +914,6 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
-
       <div class="flex gap-2 mt-3">
         <button
           @click="cardDeck.push({ id: `card_${Date.now()}`, name: 'Новая карта', type: 'custom', frontImage: null, backImage: null })"
@@ -953,7 +921,6 @@ onUnmounted(() => {
           + Добавить карту
         </button>
       </div>
-
       <p class="text-xs text-slate-500 mt-3 text-center">Нажмите на карту, а после на поле, чтобы добавить ее на поле
       </p>
     </div>
@@ -961,7 +928,6 @@ onUnmounted(() => {
     <div v-if="currentTool === 'draw'"
       class="absolute left-24 top-6 w-48 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
       <h4 class="font-bold text-white mb-3">Настройки кисти</h4>
-
       <div class="mb-3">
         <label class="text-xs text-slate-400 mb-2 block">Цвет</label>
         <div class="flex gap-2 flex-wrap items-center">
@@ -970,7 +936,6 @@ onUnmounted(() => {
               'w-6 h-6 rounded-full border-2 transition-transform hover:scale-110',
               brushColor === color ? 'border-white scale-110' : 'border-transparent'
             ]" :style="{ background: color }" />
-
           <div class="relative w-6 h-6 ml-1">
             <input type="color" v-model="brushColor"
               class="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10" />
@@ -982,7 +947,6 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
-
       <div>
         <label class="text-xs text-slate-400 mb-2 block">Ширина: {{ brushSize }}px</label>
         <input v-model="brushSize" type="range" min="1" max="20" class="w-full accent-violet-500" />
@@ -1009,22 +973,17 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
+
     <CardEditor v-if="editingCard" :card="editingCard" @save="saveCardToDeck" @close="editingCard = null" />
   </div>
 </template>
 
 <style scoped>
 .board-background {
-  background-color: #0f172a;
   will-change: transform;
   position: absolute;
   top: -50000px;
   left: -50000px;
-  background-image:
-    linear-gradient(rgba(139, 92, 246, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(139, 92, 246, 0.1) 1px, transparent 1px);
-  background-size: 50px 50px;
-  background-repeat: repeat;
 }
 
 .board-pan-area {
