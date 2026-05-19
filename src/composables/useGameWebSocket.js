@@ -18,7 +18,7 @@ export function useGameWebSocket() {
     const connect = (token) => {
       if (socketInstance.value) socketInstance.value.disconnect()
 
-      socketInstance.value = io(import.meta.env.VITE_WS_URL || 'http://localhost:5000', {
+      socketInstance.value = io(import.meta.env.VITE_WS_URL || '', {
         transports: ['websocket'],
         query: { token },
         auth: { token }

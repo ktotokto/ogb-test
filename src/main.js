@@ -5,7 +5,7 @@ import router from './router'
 import axios from 'axios'
 import './assets/styles.css'
 
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
 
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
