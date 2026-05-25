@@ -24,6 +24,12 @@ const categories = [
   { id: 'cards', label: 'Карты', icon: Square },
   { id: 'custom', label: '2D Объекты', icon: Box }
 ]
+const options =  ['square', 'circle']
+const optionsRu = {square: "Квадрат", circle: "Круг"}
+function optionsEn(option, value) {
+  return Object.keys(option).find(key => option[key] === value);
+}
+
 
 const objectTypes = [
   {
@@ -31,7 +37,7 @@ const objectTypes = [
     label: 'Кубик',
     icon: LayoutGrid,
     category: 'tokens',
-    shape: 'square',
+    shape: 'Квадрат',
     defaults: { width: 60, height: 60, value: 1, diceSides: 6, label: 'd6' },
     editorFields: [
       { key: 'label', type: 'text', label: 'Название' },
@@ -46,7 +52,7 @@ const objectTypes = [
     label: 'Карта',
     icon: Square,
     category: 'cards',
-    shape: 'square',
+    shape: 'Квадрат',
     defaults: { width: 120, height: 180, faceUp: true, cardData: { frontImage: null, backImage: null }, label: 'Новая карта' },
     editorFields: [
       { key: 'label', type: 'text', label: 'Название' },
@@ -62,7 +68,7 @@ const objectTypes = [
     label: 'Колода',
     icon: Layers,
     category: 'cards',
-    shape: 'square',
+    shape: 'Квадрат',
     defaults: { width: 120, height: 180, cards: [], cardCount: 0, label: 'Новая колода' },
     isDeck: true,
     editorFields: [
@@ -76,10 +82,10 @@ const objectTypes = [
     label: '2D Объект',
     icon: Box,
     category: 'custom',
-    defaults: { width: 120, height: 120, url: null, label: 'Объект', rotation: 0, shape: 'square' },
+    defaults: { width: 120, height: 120, url: null, label: 'Объект', rotation: 0, shape: 'Квадрат' },
     editorFields: [
       { key: 'label', type: 'text', label: 'Название' },
-      { key: 'shape', type: 'select', label: 'Форма', options: ['square', 'circle', 'rounded'] },
+      { key: 'shape', type: 'select', label: 'Форма', options: options },
       { key: 'width', type: 'number', label: 'Ширина', min: 20, max: 500 },
       { key: 'height', type: 'number', label: 'Высота', min: 20, max: 500 },
       { key: 'url', type: 'image', label: 'Изображение' },
@@ -91,10 +97,10 @@ const objectTypes = [
     label: 'Токен персонажа',
     icon: Square,
     category: 'tokens',
-    defaults: { width: 80, height: 80, characterImage: null, isEnemy: false, label: 'Герой', health: 100, shape: 'circle' },
+    defaults: { width: 80, height: 80, characterImage: null, isEnemy: false, label: 'Герой', health: 100, shape: 'Круг' },
     editorFields: [
       { key: 'label', type: 'text', label: 'Имя' },
-      { key: 'shape', type: 'select', label: 'Форма', options: ['circle', 'square', 'rounded'] },
+      { key: 'shape', type: 'select', label: 'Форма', options: options },
       { key: 'width', type: 'number', label: 'Ширина', min: 20, max: 500 },
       { key: 'height', type: 'number', label: 'Высота', min: 20, max: 500 },
       { key: 'characterImage', type: 'image', label: 'Аватар' },
@@ -107,10 +113,10 @@ const objectTypes = [
     label: 'Счётчик',
     icon: Coins,
     category: 'tokens',
-    defaults: { width: 50, height: 50, count: 1, label: 'Ресурс', color: '#f59e0b', shape: 'circle' },
+    defaults: { width: 50, height: 50, count: 1, label: 'Ресурс', color: '#f59e0b', shape: 'Круг' },
     editorFields: [
       { key: 'label', type: 'text', label: 'Название' },
-      { key: 'shape', type: 'select', label: 'Форма', options: ['circle', 'square', 'rounded'] },
+      { key: 'shape', type: 'select', label: 'Форма', options: options },
       { key: 'width', type: 'number', label: 'Ширина', min: 20, max: 500 },
       { key: 'height', type: 'number', label: 'Высота', min: 20, max: 500 },
       { key: 'count', type: 'number', label: 'Количество', min: 0 },
@@ -161,6 +167,7 @@ const openEditor = (typeConfig, existingObject = null) => {
 const saveFromEditor = () => {
   if (!editorObject.value) return
   const obj = JSON.parse(JSON.stringify(toRaw(editorObject.value)))
+  obj.shape = optionsEn(optionsRu, obj.shape)
   delete obj.editing
 
   if (obj.editing) {
@@ -238,16 +245,6 @@ const deleteObject = (objectId) => {
   if (obj?.type === 'deck') gameStore.removeDeck(objectId)
   else gameStore.removeObject(objectId)
   if (socket.value && gameStore.sessionId) socket.value.emit('object:delete', { sessionId: gameStore.sessionId, objectId })
-}
-
-const quickCreate = (typeId, extraProps = {}) => {
-  const typeConfig = objectTypes.find(t => t.id === typeId)
-  if (!typeConfig) return
-  openEditor(typeConfig)
-  if (editorObject.value) {
-    Object.assign(editorObject.value, extraProps)
-    saveFromEditor()
-  }
 }
 
 watch(() => showEditor.value, (val) => {
@@ -386,7 +383,7 @@ watch(() => showEditor.value, (val) => {
                 </label>
                 <select v-else-if="field.type === 'select'" v-model="editorObject[field.key]"
                   class="w-full px-3.5 py-2.5 bg-slate-800 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all">
-                  <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+                  <option v-for="opt in field.options">{{ optionsRu[opt] }}</option>
                 </select>
               </div>
             </template>

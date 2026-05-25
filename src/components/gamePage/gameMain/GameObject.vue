@@ -225,8 +225,6 @@ const handleRotate = () => {
     objectId: props.object.id, 
     rotation: newRotation 
   })
-  console.log(props.object.rotation);
-  
 }
 
 const handleFlip = () => {

@@ -157,7 +157,7 @@ const openEditor = () => {
           </button>
         </div>
 
-        <div class="max-h-[80vh] overflow-y-auto p-6 space-y-5">
+        <div class="max-h-[70vh] overflow-y-auto p-6 space-y-5">
           <div class="space-y-2">
             <label class="text-xs font-semibold text-slate-400 uppercase">Баннер профиля</label>
             <div
