@@ -2,7 +2,12 @@ import interact from 'interactjs'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 export function useGameBoardPan(boardRef, tool, options = {}) {
-    const { enabled = true, onZoomChange, onPanChange } = options
+    const {
+        enabled = true,
+        onZoomChange,
+        onPanChange,
+        boardRotation
+    } = options
 
     const isPanning = ref(false)
     const panOffset = ref({ x: 0, y: 0 })
@@ -14,30 +19,34 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
             boardRef.value.style.transform = `translate(${panOffset.value.x}px, ${panOffset.value.y}px) scale(${zoom.value})`
             boardRef.value.style.transformOrigin = '0 0'
         }
-        
+
         if (onPanChange) {
             onPanChange({ panOffset: { ...panOffset.value }, zoom: zoom.value })
         }
     }
 
-    const zoomAtPoint = (delta, clientX, clientY) => {
+     const zoomAtPoint = (delta, clientX, clientY) => {
         if (!boardRef.value) return
-
         const oldZoom = zoom.value;
         const newZoom = Math.max(0.25, Math.min(3, oldZoom + delta));
+        const rad = (-boardRotation.value * Math.PI) / 180
+        const cos = Math.cos(rad)
+        const sin = Math.sin(rad)
+        const centerX = window.innerWidth / 2
+        const centerY = window.innerHeight / 2
 
-        const boardRect = boardRef.value.getBoundingClientRect();
+        const dx = clientX - centerX
+        const dy = clientY - centerY
 
-        const mouseX = clientX - boardRect.left;
-        const mouseY = clientY - boardRect.top;
+        const rotatedX = (dx * cos - dy * sin) + centerX
+        const rotatedY = (dx * sin + dy * cos) + centerY
 
-        const worldX = (50000 - panOffset.value.x) / oldZoom;
-        const worldY = (50000 - panOffset.value.y) / oldZoom;
-
+        const worldX = (rotatedX + 50000 - panOffset.value.x) / oldZoom;
+        const worldY = (rotatedY + 50000 - panOffset.value.y) / oldZoom;
         zoom.value = newZoom;
 
-        panOffset.value.x = 50000 - worldX * newZoom;
-        panOffset.value.y = 50000 - worldY * newZoom;
+        panOffset.value.x = rotatedX + 50000 - worldX * newZoom;
+        panOffset.value.y = rotatedY + 50000 - worldY * newZoom;
 
         updateTransform();
 
@@ -45,6 +54,7 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
             onZoomChange(newZoom)
         }
     }
+
 
     const zoomIn = (step = 0.1, pointX = null, pointY = null) => {
         if (pointX !== null && pointY !== null) {
@@ -109,8 +119,13 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
                 },
                 move(event) {
                     if (!isPanning.value) return
-                    panOffset.value.x += event.dx
-                    panOffset.value.y += event.dy
+                    const rad = (boardRotation.value * Math.PI) / 180
+                    
+                    const cos = Math.cos(rad)
+                    const sin = Math.sin(rad)
+
+                    panOffset.value.x += event.dx * cos + event.dy * sin
+                    panOffset.value.y += -event.dx * sin + event.dy * cos
                     updateTransform()
                 },
                 end() {

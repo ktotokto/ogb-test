@@ -9,7 +9,7 @@ import { usePlayerCursors } from '@/composables/usePlayerCursors'
 import CursorMarker from './CursorMarker.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import GameHand from '../GameHand.vue'
-import { Layers } from 'lucide-vue-next'
+import { Flag, Layers, RotateCw } from 'lucide-vue-next'
 
 defineOptions({
   inheritAttrs: false
@@ -49,7 +49,8 @@ const {
 } = useGameBoardPan(boardRef, currentTool, {
   enabled: true,
   onZoomChange: () => { redrawCanvas() },
-  onPanChange: () => { redrawCanvas() }
+  onPanChange: () => { redrawCanvas() },
+  boardRotation: boardRotation
 })
 
 const showGrid = computed({
@@ -72,6 +73,7 @@ const objects = computed(() => gameStore.objects || [])
 const drawings = computed(() => gameStore.drawings || [])
 const cardDeck = ref([])
 const editingCard = ref(null)
+const isRotate = ref(false)
 
 const objectsWithStackCount = computed(() => {
   const stackCounts = {}
@@ -89,6 +91,20 @@ const objectsWithStackCount = computed(() => {
 const showCardPanel = ref(false)
 const selectedCard = ref(null)
 
+const boardStyles = computed(() => ({
+  minWidth: '100%',
+  minHeight: '100%',
+  aspectRatio: '1 / 1',
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  overflow: 'hidden',
+  transform: `translate(-50%, -50%) rotate(${boardRotation.value}deg)`,
+  transformOrigin: 'center center',
+  transition: 'transform 0.4s',
+  willChange: 'transform'
+}))
+
 const gridStyles = computed(() => ({
   backgroundImage: showGrid.value ? `
     linear-gradient(rgba(139, 92, 246, 0.15) 1px, transparent 1px),
@@ -99,7 +115,9 @@ const gridStyles = computed(() => ({
   width: '100000px',
   height: '100000px',
   transform: `translate(${panOffset.value.x}px, ${panOffset.value.y}px) scale(${zoom.value})`,
-  transformOrigin: '0 0'
+  transformOrigin: '0 0',
+  transition: 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
+  willChange: 'transform'
 }))
 
 const cursorStyle = computed(() => {
@@ -121,13 +139,17 @@ const initDrawCanvas = () => {
 }
 
 const getWorldPos = (event) => {
-  if (!drawCanvasRef.value) return { x: 50000, y: 50000 }
-  const canvasRect = drawCanvasRef.value.getBoundingClientRect()
+  if (!boardContainerRef.value) return { x: 50000, y: 50000 }
+  const canvasRect = boardContainerRef.value.getBoundingClientRect()
   return {
     x: (event.clientX - canvasRect.left + 50000 - panOffset.value.x) / zoom.value,
     y: (event.clientY - canvasRect.top + 50000 - panOffset.value.y) / zoom.value
   }
 }
+
+
+
+
 
 const startDrawing = (event) => {
   if (currentTool.value !== 'draw' || !drawCanvasRef.value) return
@@ -545,7 +567,7 @@ const handleObjectDuplicate = (object) => {
 const handleObjectRotate = ({ objectId, rotation }) => {
   if (!objectId) return
   gameStore.updateObject(objectId, { rotation })
-  
+
   if (socket.value && gameStore.sessionId) {
     socket.value.emit('object:sync', {
       sessionId: gameStore.sessionId,
@@ -688,6 +710,14 @@ const handleKeyUp = (event) => {
   }
 }
 
+const handleBoardRotate = () => {
+  isRotate.value = true
+  boardRotation.value = (boardRotation.value + 90) % 360
+  setTimeout(() => {
+    isRotate.value = false
+  }, 300)
+}
+
 const setTool = (tool) => {
   currentTool.value = tool
   if (tool !== 'addCard') {
@@ -784,7 +814,6 @@ onUnmounted(() => {
 <template>
   <GameHand :isShiftPressed="isShiftPressed" @return-card="addCardToBoard" @select-card="selectCardToAdd" />
 
-  <!-- ✅ Фон теперь реактивно привязан к backgroundColor из стора -->
   <div class="w-full h-full relative overflow-hidden" :style="{
     cursor: cursorStyle,
     backgroundColor: backgroundColor
@@ -796,7 +825,7 @@ onUnmounted(() => {
       :username="cursor.username" :color="cursor.color" :zoom="zoom" />
 
     <div ref="boardContainerRef" class="absolute inset-0 board-pan-area z-0" @click="handleBoardClick"
-      @mousedown="handleBoardMouseDown">
+      @mousedown="handleBoardMouseDown" :style="boardStyles">
       <div ref="boardRef" class="board-background" :style="gridStyles">
         <div v-if="isSelecting" class="absolute border-2 border-violet-400 bg-violet-500/20 pointer-events-none" :style="{
           left: Math.min(selectionStart.x, selectionEnd.x) + 'px',
@@ -809,7 +838,7 @@ onUnmounted(() => {
         <GameObject v-for="(obj, index) in objectsWithStackCount" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="Number(gridSize)" :snap-to-grid="false"
-          :is-shift-pressed="isShiftPressed" :board-rotation="boardRotation" :style="{ zIndex: 999 - index }"
+          :is-shift-pressed="isShiftPressed" :boardRotation="boardRotation" :style="{ zIndex: 999 - index }"
           @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
           @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
           @draw-from-deck="handleDrawFromDeck" @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck"
@@ -880,7 +909,6 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Остальные панели без изменений -->
     <div v-if="showCardPanel"
       class="absolute left-24 top-1/2 -translate-y-1/2 w-72 bg-slate-800/90 backdrop-blur rounded-2xl border border-white/10 p-4 shadow-2xl z-50 toolbar">
       <div class="flex items-center justify-between mb-4">
@@ -971,6 +999,10 @@ onUnmounted(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
         </svg>
+      </button>
+      <button @click="handleBoardRotate()"
+        class="w-12 h-12 rounded-xl bg-slate-800/60 hover:bg-slate-700 flex items-center justify-center text-white transition-all shadow-lg border border-white/10">
+        <RotateCw class="w-5 h-5" />
       </button>
     </div>
 

@@ -44,6 +44,7 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
   snapToGrid: props.snapToGrid,
   gridSize: props.gridSize,
   zoom: toRef(props, 'zoom'),
+  boardRotation: toRef(props, 'boardRotation'),
 
   onDragStart: (event, pos) => {
     if (props.object.locked) return false
@@ -131,8 +132,6 @@ const handleSpreadDeck = () => {
   emit('spread-deck', props.object.id, props.object.position)
 }
 
-
-
 onMounted(() => {
   if (props.object.position && objectRef.value) {
     updatePosition(props.object.position.x, props.object.position.y)
@@ -151,6 +150,14 @@ const objectStyles = computed(() => ({
   zIndex: isExpanded.value ? 1000 : (props.object.stackId ? (props.object.stackIndex + 1) * 10 : (props.object.zIndex || 1)),
   transformOrigin: 'center center'
 }))
+
+const rotateStyle = computed(() => ({
+  rotate: `${props.object.rotation}deg`,
+  transformOrigin: 'center center'
+}))
+
+
+rotateStyle
 
 const handleClick = (event) => {
   if (isDragging.value || isExpanded.value) return
@@ -218,6 +225,8 @@ const handleRotate = () => {
     objectId: props.object.id, 
     rotation: newRotation 
   })
+  console.log(props.object.rotation);
+  
 }
 
 const handleFlip = () => {
@@ -256,10 +265,10 @@ const isTopOfStack = computed(() => {
 <template>
   <div ref="objectRef" class="absolute select-none game-object group" :style="objectStyles" @click="handleClick"
     @contextmenu.prevent="handleContextMenu" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
-    <div class="w-full h-full relative transition-all duration-300 ease-out" :class="[
+    <div class="w-full h-full relative transition-all duration-300 ease-out" :style="rotateStyle" :class="[
       isDragging ? 'cursor-grabbing z-50 scale-105' : 'cursor-grab hover:scale-[1.02]',
       object.locked ? 'cursor-not-allowed opacity-80' : '',
-      isHovered && !isSelected && 'ring-2 ring-violet-400/30 shadow-[0_0_20px_rgba(139,92,246,0.2)]'
+      isHovered && !isSelected && 'ring-2 ring-violet-400/30 shadow-[0_0_20px_rgba(139,92,246,0.2)]',
     ]">
 
       <template v-if="object.stackId && !isTopOfStack">
