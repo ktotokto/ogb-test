@@ -9,7 +9,7 @@ import { usePlayerCursors } from '@/composables/usePlayerCursors'
 import CursorMarker from './CursorMarker.vue'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import GameHand from '../GameHand.vue'
-import { Flag, Layers, RotateCw } from 'lucide-vue-next'
+import { Flag, Layers, RotateCcw } from 'lucide-vue-next'
 
 defineOptions({
   inheritAttrs: false
@@ -27,7 +27,6 @@ const drawCanvasRef = ref(null)
 const selectedObjects = ref(new Set())
 const stackMode = ref(false)
 const stackSourceId = ref(null)
-const boardRotation = ref(0)
 
 const currentTool = ref('select')
 const brushColor = ref('#8b5cf6')
@@ -49,8 +48,7 @@ const {
 } = useGameBoardPan(boardRef, currentTool, {
   enabled: true,
   onZoomChange: () => { redrawCanvas() },
-  onPanChange: () => { redrawCanvas() },
-  boardRotation: boardRotation
+  onPanChange: () => { redrawCanvas() }
 })
 
 const showGrid = computed({
@@ -99,7 +97,7 @@ const boardStyles = computed(() => ({
   top: '50%',
   left: '50%',
   overflow: 'hidden',
-  transform: `translate(-50%, -50%) rotate(${boardRotation.value}deg)`,
+  transform: `translate(-50%, -50%) rotate(${gameStore.settings.boardRotation}deg)`,
   transformOrigin: 'center center',
   transition: 'transform 0.4s',
   willChange: 'transform'
@@ -138,18 +136,84 @@ const initDrawCanvas = () => {
   canvas.height = window.innerHeight
 }
 
+// const getWorldPos = (event) => {
+//   if (!boardContainerRef.value) return { x: 50000, y: 50000 }
+//   const canvasRect = boardContainerRef.value.getBoundingClientRect()
+
+//   return {
+//     x: (event.clientX - canvasRect.left + 50000 - panOffset.value.x) / zoom.value,
+//     y: (event.clientY - canvasRect.top + 50000 - panOffset.value.y) / zoom.value
+//   }
+// }
+
+
+
+// const getWorldPos = (event) => {
+//   if (!boardContainerRef.value) return { x: 50000, y: 50000 }
+//   const canvasRect = boardContainerRef.value.getBoundingClientRect()
+
+//   const targetX = event.clientX - canvasRect.left - panOffset.value.x
+//   const targetY = event.clientY - canvasRect.top - panOffset.value.y
+
+//   const angleRad = -gameStore.settings.boardRotation
+//   const cos = Math.cos(angleRad)
+//   const sin = Math.sin(angleRad)
+
+//   const rotatedX = targetX * cos - targetY * sin
+//   const rotatedY = targetY * sin + targetY * cos
+
+//   const finalX = Math.round((rotatedX + 50000) / zoom.value)
+//   const finalY = Math.round((rotatedY + 50000) / zoom.value)
+
+//   console.log(finalX)
+//   console.log(finalY)
+  
+  
+//   return {
+//     x: finalX,
+//     y: finalY
+//   }
+// }
+
 const getWorldPos = (event) => {
   if (!boardContainerRef.value) return { x: 50000, y: 50000 }
   const canvasRect = boardContainerRef.value.getBoundingClientRect()
+
+  const screenCenterX = canvasRect.width / 2
+  const screenCenterY = canvasRect.height / 2
+
+  const targetX = event.clientX - canvasRect.left - screenCenterX
+  const targetY = event.clientY - canvasRect.top - screenCenterY
+
+  const angleRad = -gameStore.settings.boardRotation
+  const cos = Math.cos(angleRad)
+  const sin = Math.sin(angleRad)
+
+  const rotatedX = targetX * cos - targetY * sin
+  const rotatedY = targetX * sin + targetY * cos
+
+  const finalX = Math.round((rotatedX + screenCenterX - panOffset.value.x) / zoom.value + 50000)
+  const finalY = Math.round((rotatedY + screenCenterY - panOffset.value.y) / zoom.value + 50000)
+
+  console.log(finalX, "X")
+  console.log(finalY, "Y")
+  
   return {
-    x: (event.clientX - canvasRect.left + 50000 - panOffset.value.x) / zoom.value,
-    y: (event.clientY - canvasRect.top + 50000 - panOffset.value.y) / zoom.value
+    x: finalX,
+    y: finalY
   }
 }
 
-
-
-
+const resetZoomBoard = () => {
+  const canvasRect = boardContainerRef.value.getBoundingClientRect()
+  const screenCenterX = canvasRect.width / 2
+  const screenCenterY = canvasRect.height / 2
+  panOffset.value = {   
+    x: screenCenterX,
+    y: screenCenterY
+  }
+  resetZoom()
+}
 
 const startDrawing = (event) => {
   if (currentTool.value !== 'draw' || !drawCanvasRef.value) return
@@ -291,7 +355,7 @@ const addCardToBoard = (card, event) => {
     position: { x: world.x - 60, y: world.y - 90 },
     width: 120,
     height: 180,
-    rotation: 0,
+    rotation: gameStore.settings.boardRotation,
     owner: currentUser.value?.id || 'user',
     resizable: true,
     faceUp: true,
@@ -424,8 +488,10 @@ const handleAddToHand = (objectId) => {
 
 const handleDrawFromDeck = (deckId, position) => {
   const drawnCards = gameStore.drawFromDeck(deckId, 1, position)
+  console.log(drawnCards);
 
   if (drawnCards.length > 0) {
+    console.log(12345);
     const newCard = drawnCards[0]
     const deck = gameStore.decks.find(d => d.id === deckId)
 
@@ -485,6 +551,7 @@ const createDeckOnBoard = (event) => {
     cards: [],
     cardCount: 0
   }
+
   gameStore.addDeck({ id: deck.id, name: deck.label, cards: [], cardCount: 0 }, { x: world.x - 60, y: world.y - 90 })
   if (socket.value && gameStore.sessionId) {
     socket.value.emit('deck:create', { sessionId: gameStore.sessionId, deck })
@@ -712,10 +779,11 @@ const handleKeyUp = (event) => {
 
 const handleBoardRotate = () => {
   isRotate.value = true
-  boardRotation.value = (boardRotation.value + 90) % 360
+  gameStore.settings.boardRotation = (gameStore.settings.boardRotation + 90) % 360
   setTimeout(() => {
     isRotate.value = false
   }, 300)
+  gameStore.debouncedSave()
 }
 
 const setTool = (tool) => {
@@ -838,11 +906,10 @@ onUnmounted(() => {
         <GameObject v-for="(obj, index) in objectsWithStackCount" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="Number(gridSize)" :snap-to-grid="false"
-          :is-shift-pressed="isShiftPressed" :boardRotation="boardRotation" :style="{ zIndex: 999 - index }"
-          @select="handleObjectSelect" @move="handleObjectMove" @delete="handleObjectDelete"
-          @duplicate="handleObjectDuplicate" @rotate="handleObjectRotate" @flip="handleCardFlip"
-          @draw-from-deck="handleDrawFromDeck" @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck"
-          @add-to-hand="handleAddToHand" />
+          :is-shift-pressed="isShiftPressed" :style="{ zIndex: 999 - index }" @select="handleObjectSelect"
+          @move="handleObjectMove" @delete="handleObjectDelete" @duplicate="handleObjectDuplicate"
+          @rotate="handleObjectRotate" @flip="handleCardFlip" @draw-from-deck="handleDrawFromDeck"
+          @shuffle-deck="handleShuffleDeck" @spread-deck="handleSpreadDeck" @add-to-hand="handleAddToHand" />
       </div>
     </div>
 
@@ -989,7 +1056,7 @@ onUnmounted(() => {
             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
         </svg>
       </button>
-      <button @click="resetZoom()"
+      <button @click="resetZoomBoard()"
         class="w-12 h-12 rounded-xl bg-slate-800/60 hover:bg-slate-700 flex items-center justify-center text-white transition-all shadow-lg border border-white/10 text-xs font-bold">
         {{ Math.round(zoom * 100) }}%
       </button>
@@ -1002,7 +1069,7 @@ onUnmounted(() => {
       </button>
       <button @click="handleBoardRotate()"
         class="w-12 h-12 rounded-xl bg-slate-800/60 hover:bg-slate-700 flex items-center justify-center text-white transition-all shadow-lg border border-white/10">
-        <RotateCw class="w-5 h-5" />
+        <RotateCcw class="w-5 h-5" />
       </button>
     </div>
 

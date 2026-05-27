@@ -152,7 +152,7 @@ const openEditor = (typeConfig, existingObject = null) => {
       type: typeConfig.id,
       ...typeConfig.defaults,
       position: { x: 50000, y: 50000 },
-      rotation: typeConfig.defaults?.rotation || 0,
+      rotation: gameStore.settings.boardRotation,
       owner: userStore.userId,
       ownerId: userStore.userId,
       inHand: false,

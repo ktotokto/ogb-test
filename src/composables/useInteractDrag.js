@@ -1,5 +1,6 @@
 import interact from 'interactjs'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useGameStore } from '@/stores/game'
 
 export function useInteractDrag(elementRef, options = {}) {
     const {
@@ -11,10 +12,11 @@ export function useInteractDrag(elementRef, options = {}) {
         restrictToParent = false,
         snapToGrid = false,
         gridSize = 20,
-        inertia = true,
-        boardRotation = 0
+        inertia = true
     } = options
 
+    
+    const gameStore = useGameStore()
     const isDragging = ref(false)
     const position = ref({ x: 0, y: 0 })
     let interactable = null
@@ -54,13 +56,14 @@ export function useInteractDrag(elementRef, options = {}) {
                     onDragStart?.(event, { ...position.value })
                 },
                 move(event) {
-                    const rad = (boardRotation.value * Math.PI) / 180
+                    const rad = (gameStore.settings.boardRotation * Math.PI) / 180
                     const cos = Math.cos(rad)
                     const sin = Math.sin(rad)
                     position.value.x += (event.dx * cos + event.dy * sin) / zoom.value
                     position.value.y += (-event.dx * sin + event.dy * cos) / zoom.value
                     event.target.style.transform = `translate(${position.value.x}px, ${position.value.y}px)`
                     onDragMove?.(event, { ...position.value })
+                    
                 },
                 end(event) {
                     isDragging.value = false

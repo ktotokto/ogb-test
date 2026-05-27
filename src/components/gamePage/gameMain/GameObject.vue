@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
-import { RotateCw, Trash2, Copy, FlipVertical, Layers, Hand, Plus, Shuffle, LayoutGrid, Lock, Box } from 'lucide-vue-next'
+import { RotateCcw, Trash2, Copy, FlipVertical, Layers, Hand, Plus, Shuffle, LayoutGrid, Lock, Box } from 'lucide-vue-next'
 import { useGameWebSocket } from '@/composables/useGameWebSocket'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
@@ -19,8 +19,7 @@ const props = defineProps({
   zoom: { type: Number, default: 1 },
   gridSize: { type: Number, default: 20 },
   snapToGrid: { type: Boolean, default: false },
-  isShiftPressed: { type: Boolean },
-  boardRotation: { type: Number, default: 0 }
+  isShiftPressed: { type: Boolean }
 })
 
 const emit = defineEmits([
@@ -44,7 +43,6 @@ const { isDragging, position, updatePosition } = useInteractDrag(objectRef, {
   snapToGrid: props.snapToGrid,
   gridSize: props.gridSize,
   zoom: toRef(props, 'zoom'),
-  boardRotation: toRef(props, 'boardRotation'),
 
   onDragStart: (event, pos) => {
     if (props.object.locked) return false
@@ -152,12 +150,9 @@ const objectStyles = computed(() => ({
 }))
 
 const rotateStyle = computed(() => ({
-  rotate: `${props.object.rotation}deg`,
+  rotate: `-${props.object.rotation}deg`,
   transformOrigin: 'center center'
 }))
-
-
-rotateStyle
 
 const handleClick = (event) => {
   if (isDragging.value || isExpanded.value) return
@@ -167,6 +162,8 @@ const handleClick = (event) => {
 
 const handleContextMenu = (event) => {
   if (isDeck.value && deckCardCount.value > 0) {
+    console.log(props.object);
+    
     event.preventDefault()
     emit('draw-from-deck', props.object.id, props.object.position)
     return
@@ -220,7 +217,6 @@ const handleDuplicate = () => {
 
 const handleRotate = () => {
   const newRotation = ((props.object.rotation || 0) + 90) % 360
-  
   emit('rotate', { 
     objectId: props.object.id, 
     rotation: newRotation 
@@ -431,7 +427,7 @@ const isTopOfStack = computed(() => {
         <button @click.stop="handleRotate"
           class="p-2 rounded-lg hover:bg-violet-500/20 text-slate-300 hover:text-violet-300 transition-colors"
           title="Повернуть">
-          <RotateCw class="w-4 h-4" />
+          <RotateCcw class="w-4 h-4" />
         </button>
         <button v-if="!isDeck" @click.stop="handleDuplicate"
           class="p-2 rounded-lg hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition-colors"
@@ -495,7 +491,7 @@ const isTopOfStack = computed(() => {
         </button>
         <button @click="handleRotate"
           class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-300 flex items-center gap-3 transition-colors rounded-lg mx-1">
-          <RotateCw class="w-4 h-4" /> Повернуть на 90°
+          <RotateCcw class="w-4 h-4" /> Повернуть на 90°
         </button>
         <hr class="border-white/10 my-1.5" />
         <button @click="handleDelete"

@@ -22,7 +22,6 @@ const confirmClear = ref(false)
 const confirmDelete = ref(null)
 const notification = ref({ show: false, type: 'success', message: '' })
 
-// 🔧 Явно указываем полный URL бэкенда, чтобы избежать 404 при разных портах
 const API_BASE = 'http://localhost:5000/api/game'
 const api = axios.create({
   baseURL: API_BASE,

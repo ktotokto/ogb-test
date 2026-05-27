@@ -1,13 +1,14 @@
 import interact from 'interactjs'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useGameStore } from '@/stores/game'
 
 export function useGameBoardPan(boardRef, tool, options = {}) {
     const {
         enabled = true,
         onZoomChange,
-        onPanChange,
-        boardRotation
+        onPanChange
     } = options
+    const gameStore = useGameStore()
 
     const isPanning = ref(false)
     const panOffset = ref({ x: 0, y: 0 })
@@ -29,7 +30,7 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
         if (!boardRef.value) return
         const oldZoom = zoom.value;
         const newZoom = Math.max(0.25, Math.min(3, oldZoom + delta));
-        const rad = (-boardRotation.value * Math.PI) / 180
+        const rad = (-gameStore.settings.boardRotation * Math.PI) / 180
         const cos = Math.cos(rad)
         const sin = Math.sin(rad)
         const centerX = window.innerWidth / 2
@@ -119,7 +120,7 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
                 },
                 move(event) {
                     if (!isPanning.value) return
-                    const rad = (boardRotation.value * Math.PI) / 180
+                    const rad = (gameStore.settings.boardRotation * Math.PI) / 180
                     
                     const cos = Math.cos(rad)
                     const sin = Math.sin(rad)
@@ -127,6 +128,8 @@ export function useGameBoardPan(boardRef, tool, options = {}) {
                     panOffset.value.x += event.dx * cos + event.dy * sin
                     panOffset.value.y += -event.dx * sin + event.dy * cos
                     updateTransform()
+                    
+                    
                 },
                 end() {
                     isPanning.value = false

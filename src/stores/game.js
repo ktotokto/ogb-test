@@ -16,7 +16,8 @@ export const useGameStore = defineStore('game', () => {
     gridEnabled: true,
     gridSize: 50,
     snapToGrid: false,
-    backgroundColor: '#0f172a'
+    backgroundColor: '#0f172a',
+    boardRotation: 0
   })
   const isLoading = ref(false)
   const error = ref(null)
@@ -227,6 +228,7 @@ export const useGameStore = defineStore('game', () => {
       objects.value = state.objects || []
       handCards.value = state.handCards || []
       drawings.value = state.drawings || []
+      decks.value = state.decks || []
       if (state.settings) settings.value = { ...settings.value, ...state.settings }
     }
   }
@@ -479,23 +481,26 @@ export const useGameStore = defineStore('game', () => {
           objects: objects.value,
           handCards: handCards.value,
           drawings: drawings.value,
-          settings: settings.value
+          settings: settings.value,
+          decks: decks.value
         }
         await axios.post(`/api/game/session/${sessionId.value}/save`, { state })
       } catch (err) {
         console.error('Auto-save failed:', err)
       }
-    }, 2000)
+    }, 1000)
   }
 
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
       if (sessionId.value && (objects.value.length > 0 || handCards.value.length > 0)) {
+        
         const state = {
           objects: objects.value,
           handCards: handCards.value,
           drawings: drawings.value,
-          settings: settings.value
+          settings: settings.value,
+          decks: decks.value
         }
         navigator.sendBeacon(
           `/api/game/session/${sessionId.value}/save`,
@@ -519,6 +524,7 @@ export const useGameStore = defineStore('game', () => {
 
   function updateSetting(key, value) {
     settings.value[key] = value
+    gameStore.debouncedSave()
   }
 
   return {
