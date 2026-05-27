@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { Gamepad2 } from 'lucide-vue-next'
+import { Gamepad2, Server, Wrench } from 'lucide-vue-next'
 import UserProfile from './UserProfile.vue'
 
 const router = useRouter()
@@ -23,29 +23,35 @@ const isAuthenticated = computed(() => userStore.isAuthenticated)
 
       <nav class="flex items-center gap-4">
         <template v-if="isAuthenticated">
-          <router-link
-            to="/games"
-            class="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all flex items-center gap-2"
-          >
+          <router-link to="/games"
+            class="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all flex items-center gap-2">
             <Gamepad2 class="w-4 h-4" />
             Мои игры
           </router-link>
-          
+
+          <router-link to="/games"
+            class="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all flex items-center gap-2">
+            <Server class="w-4 h-4" />
+            Сервера
+          </router-link>
+
+          <router-link to="/games"
+            class="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all flex items-center gap-2">
+            <Wrench class="w-4 h-4" />
+            Мастерская
+          </router-link>
+
           <UserProfile />
         </template>
 
         <template v-else>
-          <router-link
-            to="/login"
-            class="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all"
-          >
+          <router-link to="/login"
+            class="px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all">
             Войти
           </router-link>
-          
-          <router-link
-            to="/register"
-            class="px-4 py-2 text-sm bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white rounded-lg transition-all shadow-lg shadow-violet-500/25"
-          >
+
+          <router-link to="/register"
+            class="px-4 py-2 text-sm bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white rounded-lg transition-all shadow-lg shadow-violet-500/25">
             Регистрация
           </router-link>
         </template>

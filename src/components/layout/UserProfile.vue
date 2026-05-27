@@ -48,6 +48,7 @@ const handleBannerUpload = (e) => {
     const reader = new FileReader()
     reader.onload = (event) => {
       formData.value.banner_url = event.target.result
+
     }
     reader.readAsDataURL(file)
   }
@@ -98,7 +99,7 @@ const openEditor = () => {
 <template>
   <div class="relative">
     <button @click="isOpen = !isOpen"
-      class="flex items-center gap-3 p-2 pr-4 bg-slate-800/80 hover:bg-slate-700 text-white rounded-full border border-white/10 transition-all">
+      class="flex items-center gap-3 p-2 pr-4 hover:bg-slate-700 text-white rounded-2xl transition-all">
       <div
         class="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center text-white font-bold overflow-hidden">
         <img v-if="currentUser?.avatar_url" :src="currentUser.avatar_url" class="w-full h-full object-cover" />
@@ -115,7 +116,7 @@ const openEditor = () => {
       </div>
 
       <div class="px-4 relative -mt-8 mb-3 flex items-end gap-3">
-        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 p-1 shadow-xl">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br p-1 shadow-xl">
           <div class="w-full h-full rounded-full overflow-hidden bg-slate-800">
             <img v-if="currentUser?.avatar_url" :src="currentUser.avatar_url" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full flex items-center justify-center">
@@ -144,7 +145,7 @@ const openEditor = () => {
       </div>
     </div>
 
-    <div v-if="isEditing" class="fixed pt-120 inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    <div v-if="isEditing" class="fixed pt-[45vh] inset-0 z-[60] flex items-center justify-center"
       @click.self="isEditing = false">
       <div class="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div class="p-4 border-b border-white/10 flex justify-between items-center">
@@ -176,7 +177,7 @@ const openEditor = () => {
 
           <div class="flex items-center gap-4">
             <label class="relative cursor-pointer group">
-              <div class="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 p-1 shadow-lg">
+              <div class="w-20 h-20 rounded-full bg-gradient-to-br p-1 shadow-lg">
                 <div class="w-full h-full rounded-full overflow-hidden bg-slate-800">
                   <img v-if="formData.avatar_url" :src="formData.avatar_url" class="w-full h-full object-cover" />
                   <User v-else class="w-full h-full p-4 text-white opacity-50" />
