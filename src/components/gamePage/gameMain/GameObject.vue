@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch, toRef } from 'vue'
 import { useInteractDrag } from '@/composables/useInteractDrag'
 import { RotateCcw, Trash2, Copy, FlipVertical, Layers, Hand, Plus, Shuffle, LayoutGrid, Lock, Box } from 'lucide-vue-next'
@@ -145,7 +145,6 @@ watch(() => props.object.position, (newPos) => {
 const objectStyles = computed(() => ({
   width: `${props.object.width || 100}px`,
   height: `${props.object.height || 100}px`,
-  zIndex: isExpanded.value ? 1000 : (props.object.stackId ? (props.object.stackIndex + 1) * 10 : (props.object.zIndex || 1)),
   transformOrigin: 'center center'
 }))
 
@@ -245,15 +244,7 @@ const closeContextMenu = () => {
   showContextMenu.value = false
 }
 
-const stackCount = computed(() => {
-  if (!props.object.stackId) return 0
-  return props.object._stackCount || 0
-})
 
-const isTopOfStack = computed(() => {
-  if (!props.object.stackId) return false
-  return props.object.stackIndex === Math.max(0, stackCount.value - 1)
-})
 </script>
 
 <template>
@@ -265,12 +256,6 @@ const isTopOfStack = computed(() => {
       isHovered && !isSelected && 'ring-2 ring-violet-400/30 shadow-[0_0_20px_rgba(139,92,246,0.2)]',
     ]">
 
-      <template v-if="object.stackId && !isTopOfStack">
-        <div class="absolute inset-0 bg-slate-700/50"
-          :style="{ transform: `translate(${-(stackCount - stackIndex - 1) * 2}px, ${-(stackCount - stackIndex - 1) * 2}px)` }">
-        </div>
-      </template>
-
       <div
         class="absolute inset-0 bg-gradient-to-br from-white/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
       </div>
@@ -281,11 +266,6 @@ const isTopOfStack = computed(() => {
           class="px-3 py-1 rounded-full bg-slate-900/80 backdrop-blur-md border border-violet-500/40 shadow-lg text-[10px] font-semibold text-violet-200 tracking-wide uppercase">
           {{ object.label || object.type }}
         </div>
-      </div>
-
-      <div v-if="stackCount > 1"
-        class="absolute -top-2.5 -right-2.5 z-20 w-7 h-7 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center shadow-lg border-2 border-slate-900">
-        {{ stackCount }}
       </div>
 
       <div class="w-full h-full relative overflow-hidden transition-all duration-300" :class="[
@@ -479,10 +459,6 @@ const isTopOfStack = computed(() => {
           class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-amber-500/10 hover:text-amber-300 flex items-center gap-3 transition-colors rounded-lg mx-1">
           <FlipVertical class="w-4 h-4" /> {{ object.faceUp === false ? 'Повернуть лицом вверх' : 'Повернуть лицом вниз'
           }}
-        </button>
-        <button v-if="object.stackId" @click="emit('stack-remove', object.id); showContextMenu.value = false"
-          class="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-orange-500/10 hover:text-orange-300 flex items-center gap-3 transition-colors rounded-lg mx-1">
-          <Layers class="w-4 h-4" /> Убрать из стопки
         </button>
         <button @click="toggleObjectLock"
           :class="['w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-colors rounded-lg mx-1', object.locked ? 'text-amber-400 hover:bg-amber-500/10' : 'text-slate-300 hover:bg-slate-500/10']">

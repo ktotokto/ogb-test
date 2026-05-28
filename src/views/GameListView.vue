@@ -1,7 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { useGameStore } from '@/stores/game'
 import { Gamepad2, Plus, Edit2, Trash2, LogOut, Settings, Users, Lock, Unlock, X, Save } from 'lucide-vue-next'
 import axios from 'axios'
 import { useRouter } from 'vue-router'

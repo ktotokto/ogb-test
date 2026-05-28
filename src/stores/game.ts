@@ -2,17 +2,17 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useUserStore } from './user'
 import axios from 'axios'
+import type { Player, OptionsSession, GameObject, DeckObject, GameSession, Drawing, GameSettings, DeckData } from '@/types/index'
 
 
 export const useGameStore = defineStore('game', () => {
-  const sessionId = ref(null)
-  const session = ref(null)
-  const players = ref([])
-  const currentPlayer = ref(null)
-  const objects = ref([])
-  const drawings = ref([])
-  const chatMessages = ref([])
-  const settings = ref({
+  const sessionId = ref<string | null>(null)
+  const session = ref<GameSession | null>(null)
+  const players = ref<Player[]>([])
+  const currentPlayer = ref<Player>()
+  const objects = ref<GameObject[]>([])
+  const drawings = ref<Drawing[]>([])
+  const settings = ref<GameSettings>({
     gridEnabled: true,
     gridSize: 50,
     snapToGrid: false,
@@ -20,9 +20,8 @@ export const useGameStore = defineStore('game', () => {
     boardRotation: 0
   })
   const isLoading = ref(false)
-  const error = ref(null)
-  const decks = ref([])
-  const selectedForHand = ref(new Set())
+  const error = ref<string | null>(null)
+  const decks = ref<DeckObject[]>([])
   const userStore = useUserStore()
   const handCards = ref([])
 
@@ -30,7 +29,7 @@ export const useGameStore = defineStore('game', () => {
     return currentPlayer.value?.role === 'creator' || currentPlayer.value?.role === 'admin'
   })
 
-  async function joinSession(sessionIdValue) {
+  async function joinSession(sessionIdValue: string) {
     if (!sessionIdValue) {
       throw new Error('Session ID is required')
     }
@@ -56,7 +55,7 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  async function createSession(options = {}) {
+  async function createSession(options: OptionsSession) {
     isLoading.value = true
     error.value = null
 
@@ -79,143 +78,16 @@ export const useGameStore = defineStore('game', () => {
       return response.data.session
     } catch (err) {
       console.error('Failed to create session:', err)
-      error.value = err.response?.data?.error || 'Failed to create session'
+      error.value = (err as any).response?.data?.error || 'Failed to create session'
       throw err
     } finally {
       isLoading.value = false
     }
   }
 
-  function addToSelectedForHand(objectId) {
-    selectedForHand.value.add(objectId)
-  }
+  function setSession(sessionData: GameSession) {
+    console.log(sessionData);
 
-  function removeFromSelectedForHand(objectId) {
-    selectedForHand.value.delete(objectId)
-  }
-
-  function clearSelectedForHand() {
-    selectedForHand.value.clear()
-  }
-
-  function toggleSelectedForHand(objectId) {
-    if (selectedForHand.value.has(objectId)) {
-      selectedForHand.value.delete(objectId)
-    } else {
-      selectedForHand.value.add(objectId)
-    }
-  }
-
-  function moveSelectedToHand() {
-    selectedForHand.value.forEach(objectId => {
-      const obj = objects.value.find(o => o.id === objectId)
-      if (obj) {
-        updateObject(objectId, {
-          inHand: true,
-          owner: userStore.userId,
-          stackId: null,
-          stackIndex: 0
-        })
-      }
-    })
-    selectedForHand.value.clear()
-    debouncedSave()
-  }
-
-  function shuffleCards(cardIds) {
-    const cards = objects.value.filter(obj => cardIds.includes(obj.id))
-    const centerX = 50000
-    const centerY = 50000
-
-    cards.forEach((card, index) => {
-      const randomX = centerX + (Math.random() - 0.5) * 400
-      const randomY = centerY + (Math.random() - 0.5) * 400
-      const randomRotation = Math.random() * 20 - 10
-
-      updateObject(card.id, {
-        position: { x: randomX, y: randomY },
-        rotation: randomRotation
-      })
-    })
-
-    debouncedSave()
-  }
-
-  function shuffleDeck(deckId) {
-    const deck = decks.value.find(d => d.id === deckId)
-    if (!deck || !deck.cards) return
-
-    const shuffledCards = [...deck.cards].sort(() => Math.random() - 0.5)
-    updateDeck(deckId, { cards: shuffledCards })
-  }
-
-  function createStack(targetId, sourceId) {
-    const target = objects.value.find(o => o.id === targetId)
-    const source = objects.value.find(o => o.id === sourceId)
-    if (!target || !source) return
-
-    const stackId = target.stackId || target.id
-
-    updateObject(targetId, { stackId, stackIndex: 0 })
-    updateObject(sourceId, { stackId, stackIndex: 1 })
-
-    debouncedSave()
-  }
-
-  function addToStack(stackId, objectId) {
-    const stackCards = objects.value.filter(o => o.stackId === stackId)
-    const maxIndex = stackCards.length > 0
-      ? Math.max(...stackCards.map(c => c.stackIndex || 0))
-      : -1
-
-    updateObject(objectId, {
-      stackId,
-      stackIndex: maxIndex + 1
-    })
-
-    debouncedSave()
-  }
-
-  function removeFromStack(objectId) {
-    const obj = objects.value.find(o => o.id === objectId)
-    if (!obj || !obj.stackId) return
-
-    updateObject(objectId, {
-      stackId: null,
-      stackIndex: 0
-    })
-
-    const remainingCards = objects.value
-      .filter(o => o.stackId === obj.stackId && o.id !== objectId)
-      .sort((a, b) => (a.stackIndex || 0) - (b.stackIndex || 0))
-
-    remainingCards.forEach((card, index) => {
-      updateObject(card.id, { stackIndex: index })
-    })
-
-    debouncedSave()
-  }
-
-  function unstackAll(stackId) {
-    const stackCards = objects.value.filter(o => o.stackId === stackId)
-    const centerX = stackCards[0]?.position.x || 50000
-    const centerY = stackCards[0]?.position.y || 50000
-
-    stackCards.forEach((card, index) => {
-      updateObject(card.id, {
-        stackId: null,
-        stackIndex: 0,
-        position: {
-          x: centerX + (index % 5) * 140 - 280,
-          y: centerY + Math.floor(index / 5) * 200
-        }
-      })
-    })
-
-    debouncedSave()
-  }
-
-  function setSession(sessionData) {
     sessionId.value = sessionData.id
     session.value = sessionData
     if (sessionData.players) players.value = sessionData.players
@@ -228,59 +100,31 @@ export const useGameStore = defineStore('game', () => {
       objects.value = state.objects || []
       handCards.value = state.handCards || []
       drawings.value = state.drawings || []
-      decks.value = state.decks || []
+      decks.value = objects.value.filter((o): o is DeckObject => o.type === 'deck')
       if (state.settings) settings.value = { ...settings.value, ...state.settings }
     }
   }
 
-  function addDeck(deckData, position = { x: 50000, y: 50000 }) {
+  function addDeck(deckData: DeckData, position = { x: 50000, y: 50000 }) {
     if (objects.value.find(o => o.id === deckData.id && o.type === 'deck')) return
-
-
-    const deck = {
-      id: deckData.id || `deck_${Date.now()}`,
-      name: deckData.name || 'Новая колода',
+    const deck = ref<DeckObject>({
+      type: 'deck',
       cards: deckData.cards || [],
       cardCount: (deckData.cards || []).length,
-      createdAt: new Date().toISOString(),
-      createdBy: userStore.userId,
-      position: position
-    }
-
-    decks.value.push(deck)
-
-    objects.value.push({
-      id: deck.id,
-      type: 'deck',
-      label: deck.name,
+      id: deckData.id || `deck_${Date.now()}`,
+      label: deckData.label || 'Новая колода',
       position: position,
-      width: 120,
-      height: 180,
-      rotation: 0,
-      owner: userStore.userId,
-      ownerId: userStore.userId,
-      cards: deck.cards,
-      cardCount: deck.cardCount
+      resizable: false,
+      rotation: 0,   
+      width: 120,      
+      height: 180
     })
+
+    decks.value.push(deck.value)
+    objects.value.push(deck.value)
 
     debouncedSave()
     return deck
-  }
-
-  function updateDeck(deckId, updates) {
-    const index = decks.value.findIndex(d => d.id === deckId)
-    if (index === -1) return
-
-    decks.value[index] = { ...decks.value[index], ...updates }
-
-    const boardObj = objects.value.find(o => o.id === deckId && o.type === 'deck')
-    if (boardObj) {
-      Object.assign(boardObj, updates)
-      boardObj.cards = decks.value[index].cards
-      boardObj.cardCount = decks.value[index].cardCount
-    }
-
-    debouncedSave()
   }
 
   function removeDeck(deckId) {
@@ -343,7 +187,6 @@ export const useGameStore = defineStore('game', () => {
         width: 120,
         height: 180,
         rotation: 0,
-        owner: userStore.userId,
         ownerId: userStore.userId,
         inHand: false,
         faceUp: true,
@@ -367,6 +210,8 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function shuffleDeck(deckId) {
+    console.log(objects);
+
     const deck = decks.value.find(d => d.id === deckId)
     if (!deck?.cards) return
     deck.cards.sort(() => Math.random() - 0.5)
@@ -397,8 +242,11 @@ export const useGameStore = defineStore('game', () => {
         type: 'card', label: c.label,
         position: { x: cx + col * 140 - 280, y: cy + row * 200 - 200 },
         width: 120, height: 180, rotation: 0,
-        owner: userStore.userId, ownerId: userStore.userId,
-        inHand: false, faceUp: true, cardData: c.cardData, fromDeck: deckId
+        ownerId: userStore.userId,
+        inHand: false,
+        faceUp: true,
+        cardData: c.cardData,
+        fromDeck: deckId
       }
       objects.value.push(card)
       spread.push(card)
@@ -444,7 +292,6 @@ export const useGameStore = defineStore('game', () => {
     currentPlayer.value = null
     objects.value = []
     drawings.value = []
-    chatMessages.value = []
     handCards.value = []
   }
 
@@ -481,8 +328,7 @@ export const useGameStore = defineStore('game', () => {
           objects: objects.value,
           handCards: handCards.value,
           drawings: drawings.value,
-          settings: settings.value,
-          decks: decks.value
+          settings: settings.value
         }
         await axios.post(`/api/game/session/${sessionId.value}/save`, { state })
       } catch (err) {
@@ -494,13 +340,12 @@ export const useGameStore = defineStore('game', () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
       if (sessionId.value && (objects.value.length > 0 || handCards.value.length > 0)) {
-        
+
         const state = {
           objects: objects.value,
           handCards: handCards.value,
           drawings: drawings.value,
-          settings: settings.value,
-          decks: decks.value
+          settings: settings.value
         }
         navigator.sendBeacon(
           `/api/game/session/${sessionId.value}/save`,
@@ -515,13 +360,6 @@ export const useGameStore = defineStore('game', () => {
     drawings.value.push(drawing)
   }
 
-  function addChatMessage(message) {
-    chatMessages.value.push(message)
-    if (chatMessages.value.length > 100) {
-      chatMessages.value.shift()
-    }
-  }
-
   function updateSetting(key, value) {
     settings.value[key] = value
     gameStore.debouncedSave()
@@ -534,16 +372,13 @@ export const useGameStore = defineStore('game', () => {
     currentPlayer,
     objects,
     drawings,
-    chatMessages,
     settings,
     isLoading,
     error,
     isAdmin,
     decks,
-    selectedForHand,
     handCards,
     addDeck,
-    updateDeck,
     removeDeck,
     debouncedSave,
     joinSession,
@@ -558,20 +393,9 @@ export const useGameStore = defineStore('game', () => {
     updateObject,
     removeObject,
     addDrawing,
-    addChatMessage,
     updateSetting,
     drawFromDeck,
-    addToSelectedForHand,
-    removeFromSelectedForHand,
-    clearSelectedForHand,
-    toggleSelectedForHand,
-    moveSelectedToHand,
-    shuffleCards,
     shuffleDeck,
-    createStack,
-    addToStack,
-    removeFromStack,
-    unstackAll,
     addCardToDeck,
     spreadDeck
   }

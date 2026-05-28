@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Clock} from 'lucide-vue-next'
 import { useRouter } from 'vue-router'

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, toRaw } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
@@ -153,7 +153,6 @@ const openEditor = (typeConfig, existingObject = null) => {
       ...typeConfig.defaults,
       position: { x: 50000, y: 50000 },
       rotation: gameStore.settings.boardRotation,
-      owner: userStore.userId,
       ownerId: userStore.userId,
       inHand: false,
       resizable: true,

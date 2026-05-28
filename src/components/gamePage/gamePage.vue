@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import GameHeader from './GameHeader.vue'
 import GameMain from './gameMain/GameBoard.vue'

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -16,7 +16,6 @@ const error = ref('')
 const handleRegister = async () => {
   error.value = ''
   
-  // Валидация
   if (!username.value || !email.value || !password.value) {
     error.value = 'Все поля обязательны для заполнения'
     return

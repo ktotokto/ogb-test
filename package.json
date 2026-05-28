@@ -27,7 +27,9 @@
     "vue-sonner": "^1.0.3"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@vitejs/plugin-vue": "^6.0.4",
+    "typescript": "^6.0.3",
     "vite": "^7.3.1",
     "vite-plugin-vue-devtools": "^8.0.6"
   },

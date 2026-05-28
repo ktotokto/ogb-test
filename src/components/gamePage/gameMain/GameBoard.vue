@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
@@ -72,19 +72,6 @@ const drawings = computed(() => gameStore.drawings || [])
 const cardDeck = ref([])
 const editingCard = ref(null)
 const isRotate = ref(false)
-
-const objectsWithStackCount = computed(() => {
-  const stackCounts = {}
-  objects.value.forEach(obj => {
-    if (obj.stackId) {
-      stackCounts[obj.stackId] = (stackCounts[obj.stackId] || 0) + 1
-    }
-  })
-  return objects.value.map(obj => ({
-    ...obj,
-    _stackCount: obj.stackId ? (stackCounts[obj.stackId] || 0) : 0
-  }))
-})
 
 const showCardPanel = ref(false)
 const selectedCard = ref(null)
@@ -195,8 +182,8 @@ const getWorldPos = (event) => {
   const finalX = Math.round((rotatedX + screenCenterX - panOffset.value.x) / zoom.value + 50000)
   const finalY = Math.round((rotatedY + screenCenterY - panOffset.value.y) / zoom.value + 50000)
 
-  console.log(finalX, "X")
-  console.log(finalY, "Y")
+  // console.log(finalX, "X")
+  // console.log(finalY, "Y")
   
   return {
     x: finalX,
@@ -356,11 +343,9 @@ const addCardToBoard = (card, event) => {
     width: 120,
     height: 180,
     rotation: gameStore.settings.boardRotation,
-    owner: currentUser.value?.id || 'user',
+    ownerId: currentUser.value?.id,
     resizable: true,
     faceUp: true,
-    stackId: null,
-    stackIndex: 0,
     cardData: { ...containerCardData }
   }
   gameStore.addObject(newCard)
@@ -468,7 +453,7 @@ const handleAddToHand = (objectId) => {
 
   gameStore.updateObject(objectId, {
     inHand: true,
-    owner: userStore.userId
+    ownerId: userStore.userId
   })
 
   if (socket.value && gameStore.sessionId) {
@@ -477,7 +462,7 @@ const handleAddToHand = (objectId) => {
       userId: userStore.userId,
       update: {
         objectId,
-        changes: { inHand: true, owner: userStore.userId },
+        changes: { inHand: true, ownerId: userStore.userId },
         type: 'hand-add'
       }
     })
@@ -546,13 +531,12 @@ const createDeckOnBoard = (event) => {
     width: 120,
     height: 180,
     rotation: 0,
-    owner: userStore.userId,
     ownerId: userStore.userId,
     cards: [],
     cardCount: 0
   }
 
-  gameStore.addDeck({ id: deck.id, name: deck.label, cards: [], cardCount: 0 }, { x: world.x - 60, y: world.y - 90 })
+  gameStore.addDeck({ id: deck.id, label: deck.label, cards: [], cardCount: 0 }, { x: world.x - 60, y: world.y - 90 })
   if (socket.value && gameStore.sessionId) {
     socket.value.emit('deck:create', { sessionId: gameStore.sessionId, deck })
   }
@@ -827,10 +811,6 @@ onMounted(() => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
       gameStore.addDeck(data.deck, data.deck.position)
     })
-    socket.value?.on('deck:update', (data) => {
-      if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
-      gameStore.updateDeck(data.deck.id, data.deck)
-    })
     socket.value.on('deck:addCard', (data) => {
       if (data.sessionId !== gameStore.sessionId || data.userId === userStore.userId) return
       gameStore.addCardToDeck(data.deckId, data.card)
@@ -903,7 +883,7 @@ onUnmounted(() => {
           zIndex: 5
         }" />
 
-        <GameObject v-for="(obj, index) in objectsWithStackCount" :key="obj.id" :object="obj"
+        <GameObject v-for="(obj, index) in objects" :key="obj.id" :object="obj"
           :is-selected="selectedObjects.has(obj.id)" :is-draggable="currentTool === 'select'"
           :is-resizable="obj.resizable !== false" :zoom="zoom" :grid-size="Number(gridSize)" :snap-to-grid="false"
           :is-shift-pressed="isShiftPressed" :style="{ zIndex: 999 - index }" @select="handleObjectSelect"

@@ -1,4 +1,3 @@
-
 <template>
   <footer class="h-16 bg-slate-900/90 backdrop-blur border-t border-white/10 flex items-center justify-between px-8">
     <div class="flex items-center gap-3">

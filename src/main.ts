@@ -1,9 +1,9 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
+import App from '@/App.vue'
+import router from '@/router/index'
 import axios from 'axios'
-import './assets/styles.css'
+import '@/assets/styles.css'
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
 

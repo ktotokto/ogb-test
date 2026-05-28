@@ -1,16 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
 import { Crown, Star, User } from 'lucide-vue-next'
+import type { Player, AvatarItem } from '@/types/index'
 
 const gameStore = useGameStore()
 const userStore = useUserStore()
 
 const players = computed(() => gameStore.players || [])
-const players_avatars = ref([])
+const players_avatars = ref<AvatarItem[]>([])
 
-const getAvatar = async (player) => {
+const getAvatar = async (player: Player) => {  
   const user = await userStore.fetchUserById(player.user_id)
   return user.avatar_url
 }
@@ -26,7 +27,7 @@ players.value.forEach(element => {
 
 const currentUserId = computed(() => userStore.userId)
 
-const isMe = (player) => {
+const isMe = (player: Player) => {
   return player.user_id === currentUserId.value ||
     player.user?.id === currentUserId.value ||
     player.id === currentUserId.value
@@ -74,18 +75,17 @@ const statusConfig = {
   unknown: { color: 'bg-slate-600', glow: '', label: 'Неизвестно' }
 }
 
-const getName = (player) => {
-  return player.user?.username || player.username || player.name || 'Аноним'
+const getName = (player: Player) => {
+  return player.user.username
 }
 
-const getStatus = (player) => {
+const getStatus = (player: Player) => {
   if (player.user?.is_online !== undefined) return player.user.is_online ? 'online' : 'offline'
-  if (player.status) return player.status
   return 'online'
 }
 
-const getRole = (player) => {
-  return player.role || 'player'
+const getRole = (player: Player) => {
+  return player.role as keyof typeof roleConfig
 }
 </script>
 
@@ -120,10 +120,10 @@ const getRole = (player) => {
                   : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300'
               ]">
               <img v-if="players_avatars.find(a => a.userId === player.user_id)?.url"
-                :src="players_avatars.find(a => a.userId === player.user_id).url"
+                :src="players_avatars.find(a => a.userId === player.user_id)?.url"
                 class="w-full h-full object-cover rounded-xl" />
               <span v-else>
-                {{ player.name?.substring(0, 2).toUpperCase() || '??' }}
+                {{ player.user.username.substring(0, 2).toUpperCase() || '??' }}
               </span>
 
             </div>
@@ -146,7 +146,7 @@ const getRole = (player) => {
             </div>
 
             <div class="flex items-center gap-2 text-xs">
-              <span :class="statusConfig[getStatus(player)].text">
+              <span :class="statusConfig[getStatus(player)].label">
                 {{ statusConfig[getStatus(player)].label }}
               </span>
 

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUserStore } from '@/stores/user'
@@ -162,12 +162,9 @@ const createDeckFromImages = async () => {
         height: cardHeight.value,
         shape: cardShape.value,
         rotation: 0,
-        owner: userStore.userId,
         ownerId: userStore.userId,
         inHand: false,
         faceUp: true,
-        stackId: null,
-        stackIndex: 0,
         cardData: {
           name: uploadedCard.label || `Карта ${i + 1}`,
           frontImage: uploadedCard.image,
@@ -186,7 +183,7 @@ const createDeckFromImages = async () => {
 
     const deckData = {
       id: `deck_${Date.now()}`,
-      name: newDeckName.value,
+      lable: newDeckName.value,
       cards: deckCards,
       cardCount: deckCards.length,
       hasCustomBack: !!cardBackImage.value,
@@ -235,7 +232,7 @@ const saveDeck = () => {
 
   const deckData = {
     id: editingDeck.value?.id || `deck_${Date.now()}`,
-    name: newDeckName.value.trim(),
+    label: newDeckName.value.trim(),
     cards: selectedCards.value,
     cardCount: selectedCards.value.length,
     cardFormat: {
@@ -246,7 +243,6 @@ const saveDeck = () => {
   }
 
   if (editingDeck.value) {
-    gameStore.updateDeck(deckData.id, deckData)
     socket.value?.emit('deck:update', { sessionId: gameStore.sessionId, deck: deckData })
   } else {
     gameStore.addDeck(deckData)
@@ -283,7 +279,7 @@ const duplicateDeck = (deck) => {
   const newDeck = {
     ...deck,
     id: `deck_${Date.now()}`,
-    name: `${deck.name} (копия)`,
+    label: `${deck.label} (копия)`,
     cardFormat: deck.cardFormat || { width: 120, height: 180, shape: 'rounded' }
   }
   gameStore.addDeck(newDeck)
